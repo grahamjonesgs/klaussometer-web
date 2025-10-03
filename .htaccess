@@ -1,0 +1,24 @@
+# Deny access to the .git directory and its contents
+RedirectMatch 404 /\.git
+# --- General Best Practices ---
+Options -Indexes
+
+# --- Security: Deny Direct Access to Sensitive Files ---
+<Files "vars.php">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+# --- Performance: Set Cache Headers ---
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresDefault "access plus 1 week"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType image/x-icon "access plus 1 year"
+</IfModule>

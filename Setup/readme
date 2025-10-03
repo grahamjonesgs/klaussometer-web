@@ -1,0 +1,198 @@
+
+
+
+// Setup Apache
+/var/www/mydomain.com/index.html
+<html>
+    <head>
+        <title>Welcome to your_domain!</title>
+    </head>
+    <body>
+        <h1>Success!  The your_domain virtual host is working!</h1>
+    </body>
+</html>
+
+/etc/apache2/sites-available/mydomain.com.conf
+<VirtualHost *:80>
+    ServerAdmin admin@mydomain.com
+    ServerName mydomain.com
+    ServerAlias www.mydomain.com
+    DocumentRoot /var/www/mydomain.com
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
+(Let’s encrypt add more and creates the next file, which also has the gbridge redirect lines added)
+
+
+/etc/apache2/sites-available/mydomain.com-le-ssl.conf
+<IfModule mod_ssl.c>
+<VirtualHost *:443>
+    ServerAdmin admin@mydomain.com
+    ServerName mydomain.com
+    ServerAlias www.mydomain.com
+    DocumentRoot /var/www/mydomain.com
+    <Directory /var/www/watsonia22.com/>
+        Options -Indexes
+        AllowOverride All
+        Require all granted
+    </Directory>
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+Include /etc/letsencrypt/options-ssl-apache.conf
+SSLCertificateFile /etc/letsencrypt/live/mydomain.com/fullchain.pem
+SSLCertificateKeyFile /etc/letsencrypt/live/mydomain.com/privkey.pem
+</VirtualHost>
+</IfModule>
+
+// Grant correct ownership
+sudo usermod -aG www-data $USER
+sudo chown -R $USER:www-data /var/www/mydomain.com
+sudo chmod -R g+rwxs /var/www/mydomain.com
+
+
+
+// Install Letsencrypt
+Install python-certbot-apache
+sudo certbot --apache -d your_domain -d www.your_domain
+
+/etc/letsencrypt/live & /etc/letsencrypt/archive both need to have permissions set at 755
+
+// Node red
+Node Red – install Node Red and add the palet for mysql
+sudo npm install -g node-red-admin
+
+In setting.js
+credentialSecret: "xxxxxxxxx"
+uncomment require("fs");
+
+adminAuth: {
+        type: "credentials",
+        users: [{
+            username: "admin",
+            password: "xxxxxxx",
+            permissions: "*"
+       }]
+    },
+
+https: {
+        key: fs.readFileSync('/etc/letsencrypt/live/mydomain.com/p$
+        cert: fs.readFileSync('/etc/letsencrypt/live/mydomain.com/$
+    },
+    requireHttps: true,
+
+NOTE node-red-admin hash-pw sets the password
+
+
+// Addusers
+MYSQL,
+Install. Create users with
+CREATE USER 'grahamjonesgs'@'%' IDENTIFIED BY 'passwordxxxx'
+GRANT ALL PRIVILEGES ON * . * TO 'grahamjonesgs'@'localhost';
+Create database readings
+
+Read only user for php
+mysql> CREATE USER 'reader'@'%' IDENTIFIED BY 'xxxxxxxxxx'
+
+mysql> GRANT SELECT ON readings.* TO 'reader'@'%';
+
+
+// Create the tables
+CREATE TABLE rec_data (
+    room_id VARCHAR(50) NOT NULL,
+    value FLOAT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    dt   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (room_id, type, dt));
+
+CREATE INDEX idx_dt on rec_data(dt);
+
+CREATE TABLE hourly_avg (
+    room_id VARCHAR(50) NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    dt_hour DATETIME NOT NULL,
+    avg_value FLOAT NOT NULL,
+    PRIMARY KEY (room_id, type, dt_hour)
+);
+
+CREATE TABLE daily_avg (
+    room_id VARCHAR(50) NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    dt_day DATE NOT NULL,
+    avg_value FLOAT NOT NULL,
+    PRIMARY KEY (room_id, type, dt_day)
+);
+
+// Add tasks to populate avg tables
+// Run once for hourly
+INSERT INTO hourly_avg (room_id, type, dt_hour, avg_value)
+SELECT
+    room_id,
+    type,
+    DATE_FORMAT(dt, '%Y-%m-%d %H:30:00') AS dt_hour,
+    AVG(value) AS avg_value
+FROM
+    rec_data
+GROUP BY
+    room_id, type, dt_hour
+ON DUPLICATE KEY UPDATE avg_value = VALUES(avg_value);
+
+// Enable scheduler
+SET GLOBAL event_scheduler = ON;
+
+// Job to update hourly
+CREATE EVENT hourly_aggregation_event
+ON SCHEDULE EVERY 1 HOUR
+STARTS NOW()
+DO
+    INSERT INTO hourly_avg (room_id, type, dt_hour, avg_value)
+    SELECT
+        room_id,
+        type,
+        DATE_FORMAT(dt, '%Y-%m-%d %H:30:00') AS dt_hour,
+        AVG(value) AS avg_value
+    FROM
+        rec_data
+    WHERE
+        dt >= NOW() - INTERVAL 1 HOUR AND dt < NOW()
+    GROUP BY
+        room_id, type, dt_hour
+    ON DUPLICATE KEY UPDATE avg_value = VALUES(avg_value);
+
+// Run once for daily
+INSERT INTO daily_avg (room_id, type, dt_day, avg_value)
+SELECT
+    room_id,
+    type,
+    DATE_FORMAT(dt, '%Y-%m-%d 12:00:00') AS dt_day,
+    AVG(value) AS avg_value
+FROM
+    rec_data
+GROUP BY
+    room_id, type, dt_day
+ON DUPLICATE KEY UPDATE avg_value = VALUES(avg_value);
+
+// Create job for daily
+CREATE EVENT daily_aggregation_event
+ON SCHEDULE EVERY 1 HOUR
+STARTS NOW()
+DO
+    INSERT INTO daily_avg (room_id, type, dt_day, avg_value)
+    SELECT
+        room_id,
+        type,
+        DATE_FORMAT(dt, '%Y-%m-%d 12:00:00') AS dt_day,
+        AVG(value) AS avg_value
+    FROM
+        rec_data
+    WHERE
+        dt >= NOW() - INTERVAL 1 HOUR AND dt < NOW()
+    GROUP BY
+        room_id, type, dt_day
+    ON DUPLICATE KEY UPDATE avg_value = VALUES(avg_value);
+
+
+// Make PHP work with database
+sudo apt install php php-mysql libapache2-mod-php
+ // DB backup
+ sudo mariadb-dump --databases readings > backup250924.sql
+
