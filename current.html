@@ -182,22 +182,32 @@
                             const tempClass = (newTemp !== oldTemp && oldTemp !== null) ? 'flash-temp' : '';
                             const humidityClass = (newHumidity !== oldHumidity && oldHumidity !== null) ? 'flash-humidity' : '';
 
-                            var cardHTML = `
-                                <div class="room-card" data-room-id="${room_id}">
-                                    <h2>${displayName}</h2>
-                                    <p>
-                                        <span class="value-display temp-value ${tempClass}" id="temp-${room_id}">${newTemp}</span>
-                                        <span class="unit">&#8451</span>
-                                    </p>
-                                    <p>
-                                        <span class="value-display humidity-value ${humidityClass}" id="humidity-${room_id}">${newHumidity}</span>
-                                        <span class="unit">%</span>
-                                    </p>
-                                </div>
-                            `;
-                            dashboardContainer.append(cardHTML);
-                        }
-                    }
+                            var $card = $('<div>')
+                                .addClass('room-card')
+                                .attr('data-room-id', room_id);
+
+                            var $title = $('<h2>').text(displayName);
+
+                            var $tempPara = $('<p>');
+                            var $tempValue = $('<span>')
+                                .addClass('value-display temp-value ' + tempClass)
+                                .attr('id', 'temp-' + room_id)
+                                .text(newTemp);
+                            var $tempUnit = $('<span>').addClass('unit').html('&#8451;');
+                            $tempPara.append($tempValue, $tempUnit);
+
+                            var $humidityPara = $('<p>');
+                            var $humidityValue = $('<span>')
+                                .addClass('value-display humidity-value ' + humidityClass)
+                                .attr('id', 'humidity-' + room_id)
+                                .text(newHumidity);
+                            var $humidityUnit = $('<span>').addClass('unit').text('%');
+                            $humidityPara.append($humidityValue, $humidityUnit);
+
+                            $card.append($title, $tempPara, $humidityPara);
+                            dashboardContainer.append($card);
+                                                    }
+                                                }
 
                     previousRoomData = currentRoomData;
                     

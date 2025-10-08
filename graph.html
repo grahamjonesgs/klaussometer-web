@@ -59,6 +59,7 @@
     <script src="https://cdn.jsdelivr.net/npm/moment@2.27.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-colorschemes"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     
     <script src="/js/config.js"></script>
 
@@ -119,22 +120,6 @@
             showGraph(type_value, type_text, days_value);
         }
 
-        function smooth(inputArray) {
-            const returnArray = [...inputArray];
-            if (inputArray.length < 5000000) {
-                return inputArray;
-            }
-            for (let i = 2; i < inputArray.length - 2; i++) {
-                const sum = parseFloat(inputArray[i - 2].y) +
-                    parseFloat(inputArray[i - 1].y) +
-                    parseFloat(inputArray[i].y) +
-                    parseFloat(inputArray[i + 1].y) +
-                    parseFloat(inputArray[i + 2].y);
-                returnArray[i].y = (sum / 5.0).toFixed(3);
-            }
-            return returnArray;
-        }
-
         function showGraph(type_value, type_text, days_value) {
             let xunits;
             if (days_value <= 2) {
@@ -162,7 +147,7 @@
                             datasets[item.room_id] = [];
                         }
                         datasets[item.room_id].push({
-                            x: moment.utc(item.dt).add(2, 'hour'),
+                            x: moment.utc(item.dt),
                             y: item.value
                         });
                         currentValues[item.room_id] = item.value;
@@ -175,7 +160,7 @@
                         return {
                             label: `${roomMap[roomId] || roomId} - ${currentValues[roomId]}`,
                             fill: false,
-                            data: smooth(datasets[roomId])
+                            data: datasets[roomId]
                         };
                     });
 
@@ -222,22 +207,6 @@
                                 },
                                 colorschemes: {
                                     scheme: 'brewer.Pastel19' // A different, softer color scheme
-                                },
-                                tooltip: {
-                                    enabled: false, 
-                                    mode: 'index',
-                                    intersect: false,
-                                    callbacks: {
-                                        label: function(context) {
-                                            const label = context.dataset.label || '';
-                                            if (label) {
-                                                let value = context.parsed.y;
-                                                // Format the value to a specific number of decimal places
-                                                return `${label}: ${value.toFixed(2)}`;
-                                            }
-                                            return null;
-                                        }
-                                 }
                                 },
                                 zoom: {
                                     pan: {

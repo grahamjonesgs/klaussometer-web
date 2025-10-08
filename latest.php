@@ -4,7 +4,10 @@ include 'vars.php';
 
 $conn = new mysqli($servername, $username, $password, $dbname);
 if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+    error_log("Database connection failed: " . $conn->connect_error);
+    http_response_code(500);
+    echo json_encode(["error" => "Service temporarily unavailable"]);
+    exit;
 }
 
 // Prepare a single query to get the latest data for all required types
