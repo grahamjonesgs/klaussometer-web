@@ -14,7 +14,7 @@ $days = intval(trim($days_string,'"\''));
 
 $stmt = null;
 // Will avrage over 10 minutes for less than 6 days or there is too much noise
-if ($days <= 6) {
+if ($days <= 8) {
     $sql = "SELECT room_id, ROUND(AVG(value),3) AS value, type,
             FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(dt) / 600) * 600) AS dt
             FROM rec_data
