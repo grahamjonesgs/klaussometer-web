@@ -17,7 +17,7 @@ $days = intval(trim($days_string,'"\''));
 
 $stmt = null;
 // Will average over 10 minutes for one day and 30 minutes for one week or there is too much noise
-if ($days <= 8) {
+if ($days <= 7) {
     $interval = ($days <= 1) ? INTERVAL_10_MIN : INTERVAL_30_MIN;
     $sql = "SELECT room_id, ROUND(AVG(value),3) AS value, type,
             FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(dt) / ?) * ?) AS dt

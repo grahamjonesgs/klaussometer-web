@@ -52,6 +52,13 @@
             background-color: #eef2f5;
             padding: 20px;
         }
+        .chart-container {
+            position: relative;
+            height: 60vh;
+            width: 95vw;
+            max-width: 1500px;
+            margin: 20px auto;
+}
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -71,9 +78,11 @@
 
 <body>
     <a href="current.html" class="nav-button">View Current</a>
+    <button onclick="showCurrent()" class="nav-button">Refresh Now</button>
+    <button onclick="chart.resetZoom()" class="nav-button">Reset Zoom</button>
     <form>
         
-        <div class="chart-container" style="position: relative; height:80vh; width:80vw">
+        <div class="chart-container">
             <canvas id="myChart"></canvas>
         </div>
 
@@ -97,6 +106,7 @@
             </select>
         </div>
     </form>
+    
 
     <script>
         let chart;
@@ -186,10 +196,9 @@
                                     display: true,
                                     title: {
                                         display: true,
-                                        text: type_text,
-                                        font: {
-                                            size: 16
-                                        }
+                                        text: type_text + (type_value === 'tempset-ambient' ? ' (°C)' : 
+                                                        type_value === 'tempset-humidity' ? ' (%)' : ' (V)'),
+                                        font: { size: 16 }
                                     }
                                 },
                                 x: {
