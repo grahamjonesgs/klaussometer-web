@@ -142,21 +142,29 @@ SET GLOBAL event_scheduler = ON;
 // Job to update hourly
 CREATE EVENT hourly_aggregation_event
 ON SCHEDULE EVERY 1 HOUR
-STARTS NOW()
 DO
+BEGIN
+    DECLARE rows_count INT DEFAULT 0;
+    DECLARE error_msg TEXT DEFAULT NULL;
+    
+    -- Perform the aggregation
     INSERT INTO hourly_avg (room_id, type, dt_hour, avg_value)
     SELECT
         room_id,
         type,
         DATE_FORMAT(dt, '%Y-%m-%d %H:30:00') AS dt_hour,
         AVG(value) AS avg_value
-    FROM
-        rec_data
-    WHERE
-        dt >= NOW() - INTERVAL 1 HOUR AND dt < NOW()
-    GROUP BY
-        room_id, type, dt_hour
+    FROM rec_data
+    WHERE dt >= NOW() - INTERVAL 2 HOUR AND dt < NOW()
+    GROUP BY room_id, type, dt_hour
     ON DUPLICATE KEY UPDATE avg_value = VALUES(avg_value);
+    
+    -- Get number of rows affected
+    SET rows_count = ROW_COUNT();
+    
+    -- Log the execution
+    INSERT INTO event_log (event_name, rows_affected, status)
+    VALUES ('hourly_aggregation_event', rows_count, 'SUCCESS');
 
 // Run once for daily
 INSERT INTO daily_avg (room_id, type, dt_day, avg_value)
@@ -172,24 +180,50 @@ GROUP BY
 ON DUPLICATE KEY UPDATE avg_value = VALUES(avg_value);
 
 // Create job for daily
-CREATE EVENT daily_aggregation_event
-ON SCHEDULE EVERY 1 HOUR
-STARTS NOW()
+CCREATE EVENT daily_aggregation_event
+ON SCHEDULE EVERY 1 DAY
+STARTS (CURRENT_DATE + INTERVAL 1 DAY)
 DO
+BEGIN
+    DECLARE rows_count INT DEFAULT 0;
+    
     INSERT INTO daily_avg (room_id, type, dt_day, avg_value)
     SELECT
         room_id,
         type,
-        DATE_FORMAT(dt, '%Y-%m-%d 12:00:00') AS dt_day,
+        DATE(dt) AS dt_day,
         AVG(value) AS avg_value
-    FROM
-        rec_data
-    WHERE
-        dt >= NOW() - INTERVAL 1 HOUR AND dt < NOW()
-    GROUP BY
-        room_id, type, dt_day
+    FROM rec_data
+    WHERE dt >= CURRENT_DATE - INTERVAL 1 DAY 
+      AND dt < CURRENT_DATE
+    GROUP BY room_id, type, dt_day
     ON DUPLICATE KEY UPDATE avg_value = VALUES(avg_value);
+    
+    SET rows_count = ROW_COUNT();
+    
+    INSERT INTO event_log (event_name, rows_affected, status)
+    VALUES ('daily_aggregation_event', rows_count, 'SUCCESS');
 
+// Add Indexes
+ALTER TABLE hourly_avg ADD INDEX idx_dt_hour (dt_hour);
+ALTER TABLE daily_avg ADD INDEX idx_dt_day (dt_day);
+
+// add log table
+CREATE TABLE event_log (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    event_name VARCHAR(100),
+    execution_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    rows_affected INT,
+    status VARCHAR(20),
+    error_message TEXT
+);
+
+// Logfile clean up
+CREATE EVENT cleanup_event_log
+ON SCHEDULE EVERY 1 WEEK
+DO
+DELETE FROM event_log 
+WHERE execution_time < NOW() - INTERVAL 30 DAY;
 
 // Make PHP work with database
 sudo apt install php php-mysql libapache2-mod-php
