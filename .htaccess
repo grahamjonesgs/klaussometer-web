@@ -9,6 +9,11 @@ Options -Indexes
     Deny from all
 </Files>
 
+<Files "auth.php">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
 # --- Performance: Set Cache Headers ---
 <IfModule mod_expires.c>
     ExpiresActive On

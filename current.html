@@ -22,6 +22,7 @@
         .nav-button:hover {
             background-color: #0056b3;
         }
+        
         body {
             font-family: Arial, sans-serif;
             background-color: #eef2f5;
@@ -53,7 +54,7 @@
             color: #333;
         }
 
-        .value-display { /* A common class for the values */
+        .value-display {
             display: inline-block;
         }
 
@@ -76,15 +77,14 @@
             margin-left: 5px;
         }
 
-        /* --- New CSS for Flashing Effect --- */
         @keyframes flash-animation {
             0% { background-color: transparent; }
-            50% { background-color: yellow; } /* Flash color */
+            50% { background-color: yellow; }
             100% { background-color: transparent; }
         }
 
         .flash-temp {
-            animation: flash-animation 1s ease-out 3; /* Flash 3 times over 1 second */
+            animation: flash-animation 1s ease-out 3;
             border-radius: 4px;
         }
         
@@ -92,8 +92,6 @@
             animation: flash-animation 1s ease-out 3; 
             border-radius: 4px;
         }
-        /* ---------------------------------- */
-
 
         @media (max-width: 768px) {
             .room-card {
@@ -111,43 +109,37 @@
         }
     </style>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-
     <script src="../js/config.js"></script> 
 
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-
 </head>
 
 <body>
     <a href="graph.html" class="nav-button">View Graph</a>
-    <div id="dashboard-container" class="dashboard-container">
-    </div>
-
+    <button onclick="showCurrent()" class="nav-button">Refresh Now</button>
+    <a href="system_status.php" class="nav-button">System Status</a>
     
-
+    <div id="dashboard-container" class="dashboard-container"></div>
     <p id="last-updated-time" style="text-align: center; font-style: italic; color: #666;"></p>
 
     <script>
-        // Store the previous data to compare against
         let previousRoomData = {}; 
 
         $(document).ready(function() {
-            // Run the function once immediately
             showCurrent();
-            
-            // Then, set it to run every 30 seconds
             setInterval(showCurrent, 30000);
         });
 
         function showCurrent() {
+            $('#dashboard-container').html('<p style="text-align:center;">Loading...</p>');
+            
             $.get("latest.php", function(data) {
                 var dataJSON = JSON.parse(data);
                 var currentRoomData = {};
 
                 if (dataJSON.length > 0) {
-                    
                     dataJSON.forEach(function(item) {
                         var room_id = item.room_id;
                         var type = item.type;
@@ -206,8 +198,8 @@
 
                             $card.append($title, $tempPara, $humidityPara);
                             dashboardContainer.append($card);
-                                                    }
-                                                }
+                        }
+                    }
 
                     previousRoomData = currentRoomData;
                     
@@ -220,9 +212,11 @@
                     document.getElementById('last-updated-time').textContent = 'Last updated: ' + timeString;
 
                 } else {
-                    console.log("No data returned from server.");
+                    $('#dashboard-container').html('<p style="text-align:center;color:#666;">No sensor data available</p>');
                     document.getElementById('last-updated-time').textContent = 'Last updated: ' + new Date().toLocaleTimeString() + ' (No data)';
                 }
+            }).fail(function() {
+                $('#dashboard-container').html('<p style="text-align:center;color:red;">Failed to load data. Please try again.</p>');
             });
         }
     </script>
