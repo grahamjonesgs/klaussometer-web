@@ -34,7 +34,7 @@
             flex-wrap: wrap;
             justify-content: center;
             gap: 20px;
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
         }
 
@@ -48,6 +48,21 @@
             flex: 1;
         }
 
+        .solar-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .solar-card h2 {
+            color: white;
+            border-bottom-color: rgba(255,255,255,0.3);
+        }
+
+        .solar-card .stat-label,
+        .solar-card .stat-value {
+            color: white;
+        }
+
         .room-card h2 {
             margin: 0 0 10px;
             font-size: 1.5rem;
@@ -59,7 +74,8 @@
         }
 
         .temp-value,
-        .humidity-value {
+        .humidity-value,
+        .power-value {
             font-size: 3rem;
             font-weight: bold;
             color: #007bff;
@@ -70,11 +86,43 @@
             color: #28a745;
         }
 
+        .power-value {
+            color: #ffd700;
+        }
+
         .unit {
             font-size: 1.5rem;
             font-weight: normal;
             color: #666;
             margin-left: 5px;
+        }
+
+        .solar-card .unit {
+            color: rgba(255,255,255,0.9);
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .solar-card .stat-row {
+            border-bottom-color: rgba(255,255,255,0.2);
+        }
+
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            font-weight: bold;
+            color: #555;
+        }
+
+        .stat-value {
+            color: #333;
         }
 
         @keyframes flash-animation {
@@ -99,7 +147,8 @@
             }
 
             .temp-value,
-            .humidity-value {
+            .humidity-value,
+            .power-value {
                 font-size: 2rem;
             }
 
@@ -118,24 +167,38 @@
 
 <body>
     <a href="graph.html" class="nav-button">View Graph</a>
-    <button onclick="showCurrent()" class="nav-button">Refresh Now</button>
+    <button onclick="refreshAll()" class="nav-button">Refresh Now</button>
     <a href="system_status.php" class="nav-button">System Status</a>
     
+    <h2 style="text-align: center; color: #333; margin-top: 20px;">Temperature & Humidity</h2>
     <div id="dashboard-container" class="dashboard-container"></div>
+    
+    <h2 style="text-align: center; color: #333; margin-top: 40px;">Solar & Power</h2>
+    <div id="solar-container" class="dashboard-container"></div>
+    
     <p id="last-updated-time" style="text-align: center; font-style: italic; color: #666;"></p>
 
     <script>
         let previousRoomData = {}; 
 
         $(document).ready(function() {
-            showCurrent();
-            setInterval(showCurrent, 30000);
+            refreshAll();
+            setInterval(refreshAll, 30000);
         });
 
+        function refreshAll() {
+            showCurrent();
+            showSolar();
+        }
+
         function showCurrent() {
-            $('#dashboard-container').html('<p style="text-align:center;">Loading...</p>');
+            // Show loading indicator
+            if ($('#dashboard-container .room-card').length === 0) {
+                $('#dashboard-container').append('<div class="room-card" id="sensor-loading"><p>Loading sensors...</p></div>');
+            }
             
             $.get("latest.php", function(data) {
+                $('#sensor-loading').remove();
                 var dataJSON = JSON.parse(data);
                 var currentRoomData = {};
 
@@ -160,6 +223,7 @@
                     });
 
                     var dashboardContainer = $('#dashboard-container');
+                    // Clear all room cards (not solar cards - they're in different container now)
                     dashboardContainer.empty();
 
                     for (var room_id in currentRoomData) {
@@ -207,17 +271,143 @@
                         $('.flash-temp, .flash-humidity').removeClass('flash-temp flash-humidity');
                     }, 3000);
 
-                    var now = new Date();
-                    var timeString = now.toLocaleTimeString();
-                    document.getElementById('last-updated-time').textContent = 'Last updated: ' + timeString;
+                    updateTimestamp();
 
                 } else {
                     $('#dashboard-container').html('<p style="text-align:center;color:#666;">No sensor data available</p>');
-                    document.getElementById('last-updated-time').textContent = 'Last updated: ' + new Date().toLocaleTimeString() + ' (No data)';
+                    updateTimestamp('(No data)');
                 }
             }).fail(function() {
-                $('#dashboard-container').html('<p style="text-align:center;color:red;">Failed to load data. Please try again.</p>');
+                $('#sensor-loading').remove();
+                console.error('Failed to load sensor data');
             });
+        }
+
+        function showSolar() {
+            // Show loading indicator for solar
+            if ($('#solar-container .solar-card').length === 0) {
+                var $loadingCard = $('<div>')
+                    .addClass('room-card solar-card')
+                    .attr('id', 'solar-loading')
+                    .html('<h2>☀️ Solar Power</h2><p>Loading...</p>');
+                $('#solar-container').append($loadingCard);
+            }
+            
+            $.get("solar.php", function(data) {
+                $('#solar-loading').remove();
+                var solarData = typeof data === 'string' ? JSON.parse(data) : data;
+                
+                // Remove existing solar cards
+                $('#solar-container').empty();
+                
+                if (solarData.error) {
+                    console.error('Solar data error:', solarData.error);
+                    return;
+                }
+
+                var solarContainer = $('#solar-container');
+
+                // Main solar card - Current Power
+                var $solarCard = $('<div>')
+                    .addClass('room-card solar-card')
+                    .attr('data-type', 'solar-main');
+
+                var $title = $('<h2>').html('☀️ Solar Power');
+
+                var $powerPara = $('<p>');
+                var $powerValue = $('<span>')
+                    .addClass('value-display power-value')
+                    .text((solarData.current_power / 1000).toFixed(2));
+                var $powerUnit = $('<span>').addClass('unit').text('kW');
+                $powerPara.append($powerValue, $powerUnit);
+
+                // Using power
+                var $usingRow = $('<div>').addClass('stat-row');
+                $usingRow.append(
+                    $('<span>').addClass('stat-label').text('Using:'),
+                    $('<span>').addClass('stat-value').text((solarData.using_power / 1000).toFixed(2) + ' kW')
+                );
+
+                $solarCard.append($title, $powerPara, $usingRow);
+
+                // Battery card (if available)
+                if (solarData.battery_soc !== null && solarData.battery_soc !== undefined) {
+                    var $batteryCard = $('<div>')
+                        .addClass('room-card solar-card')
+                        .attr('data-type', 'solar-battery');
+
+                    var $batteryTitle = $('<h2>').html('🔋 Battery');
+                    
+                    var $batteryPara = $('<p>');
+                    var $batteryValue = $('<span>')
+                        .addClass('value-display power-value')
+                        .text(solarData.battery_soc.toFixed(0));
+                    var $batteryUnit = $('<span>').addClass('unit').text('%');
+                    $batteryPara.append($batteryValue, $batteryUnit);
+                    
+                    // Battery power flow
+                    var $batteryFlowRow = $('<div>').addClass('stat-row');
+                    var batteryFlow = (solarData.battery_power / 1000).toFixed(2);
+                    var batteryDirection = solarData.battery_power > 0 ? '↑ Charging' : '↓ Discharging';
+                    $batteryFlowRow.append(
+                        $('<span>').addClass('stat-label').text('Power:'),
+                        $('<span>').addClass('stat-value').text(Math.abs(batteryFlow) + ' kW ' + batteryDirection)
+                    );
+
+                    $batteryCard.append($batteryTitle, $batteryPara, $batteryFlowRow);
+                    solarContainer.append($batteryCard);
+                }
+
+                // Grid card
+                if (solarData.grid_power !== null && solarData.grid_power !== undefined) {
+                    var $gridCard = $('<div>')
+                        .addClass('room-card solar-card')
+                        .attr('data-type', 'solar-grid');
+
+                    var $gridTitle = $('<h2>').html('⚡ Grid');
+                    
+                    var gridPowerKW = (solarData.grid_power / 1000).toFixed(2);
+                    var gridDirection = solarData.grid_power > 0 ? '↓ Importing' : '↑ Exporting';
+
+                    var $gridPara = $('<p>');
+                    var $gridValue = $('<span>')
+                        .addClass('value-display power-value')
+                        .text(Math.abs(gridPowerKW));
+                    var $gridUnit = $('<span>').addClass('unit').text('kW');
+                    $gridPara.append($gridValue, $gridUnit);
+                    
+                    var $gridFlowRow = $('<div>').addClass('stat-row');
+                    $gridFlowRow.append(
+                        $('<span>').addClass('stat-label').text(''),
+                        $('<span>').addClass('stat-value').text(gridDirection)
+                    );
+
+                    $gridCard.append($gridTitle, $gridPara, $gridFlowRow);
+                    solarContainer.append($gridCard);
+                }
+
+                // Add solar power card (now added last instead of first)
+                solarContainer.append($solarCard);
+
+            }).fail(function(jqXHR, textStatus, errorThrown) {
+                $('#solar-loading').remove();
+                console.error('Failed to load solar data:', textStatus, errorThrown);
+                // Optionally show a warning card
+                var $errorCard = $('<div>')
+                    .addClass('room-card')
+                    .css({
+                        'background-color': '#fff3cd',
+                        'border': '1px solid #ffc107'
+                    })
+                    .html('<h2>⚠️ Solar System</h2><p style="color:#856404;">Unable to load data</p>');
+                $('#solar-container').append($errorCard);
+            });
+        }
+
+        function updateTimestamp(suffix = '') {
+            var now = new Date();
+            var timeString = now.toLocaleTimeString();
+            document.getElementById('last-updated-time').textContent = 'Last updated: ' + timeString + (suffix ? ' ' + suffix : '');
         }
     </script>
 </body>
