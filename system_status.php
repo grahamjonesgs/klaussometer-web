@@ -55,7 +55,7 @@ function getSystemStats() {
         $stats['disk_percent'] = $matches[5];
     }
     
-    // Available updates (requires sudo privileges or specific permissions)
+    // Available updates
     $updates = shell_exec('/usr/lib/update-notifier/apt-check 2>&1');
     if (preg_match('/(\d+);(\d+)/', $updates, $matches)) {
         $stats['updates_available'] = $matches[0];
@@ -68,12 +68,138 @@ function getSystemStats() {
     return $stats;
 }
 
-// Get database event logs
+// Function to get network information
+function getNetworkInfo() {
+    $network = [];
+    
+    // Get local IP addresses
+    $ifconfig = shell_exec('ip addr show');
+    preg_match_all('/inet (\d+\.\d+\.\d+\.\d+)/', $ifconfig, $matches);
+    $network['local_ips'] = array_filter($matches[1], function($ip) {
+        return $ip !== '127.0.0.1'; // Exclude localhost
+    });
+    
+    // Get external IP (with timeout)
+    $external_ip = @file_get_contents('https://api.ipify.org', false, stream_context_create([
+        'http' => ['timeout' => 3]
+    ]));
+    $network['external_ip'] = $external_ip ?: 'Unable to fetch';
+    
+    // Test internet connectivity
+    $network['internet_connected'] = ($external_ip !== false);
+    
+    // Get hostname
+    $network['hostname'] = gethostname();
+    
+    return $network;
+}
+
+// Function to get service status
+function getServiceStatus() {
+    $services = [];
+    
+    // PHP Version
+    $services['php_version'] = phpversion();
+    
+    // Web server (Apache or Nginx)
+    $apache_status = shell_exec('systemctl is-active apache2 2>/dev/null');
+    $nginx_status = shell_exec('systemctl is-active nginx 2>/dev/null');
+    
+    if (trim($apache_status) === 'active') {
+        $services['webserver'] = 'Apache';
+        $services['webserver_status'] = 'Running';
+        $apache_version = shell_exec('apache2 -v 2>/dev/null | head -1');
+        if (preg_match('/Apache\/([^\s]+)/', $apache_version, $matches)) {
+            $services['webserver_version'] = $matches[1];
+        }
+    } elseif (trim($nginx_status) === 'active') {
+        $services['webserver'] = 'Nginx';
+        $services['webserver_status'] = 'Running';
+        $nginx_version = shell_exec('nginx -v 2>&1');
+        if (preg_match('/nginx\/([^\s]+)/', $nginx_version, $matches)) {
+            $services['webserver_version'] = $matches[1];
+        }
+    } else {
+        $services['webserver'] = 'Unknown';
+        $services['webserver_status'] = 'Not Running';
+    }
+    
+    // MariaDB/MySQL status
+    $mysql_status = shell_exec('systemctl is-active mariadb 2>/dev/null || systemctl is-active mysql 2>/dev/null');
+    $services['database_status'] = (trim($mysql_status) === 'active') ? 'Running' : 'Not Running';
+    
+    return $services;
+}
+
+// Function to get database statistics
+function getDatabaseStats($conn) {
+    $stats = [];
+    
+    // Database size
+    $result = $conn->query("SELECT 
+        ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS size_mb 
+        FROM information_schema.TABLES 
+        WHERE table_schema = DATABASE()");
+    if ($row = $result->fetch_assoc()) {
+        $stats['total_size_mb'] = $row['size_mb'];
+    }
+    
+    // Table sizes and row counts
+    $tables = ['rec_data', 'hourly_avg', 'daily_avg', 'event_log'];
+    $stats['tables'] = [];
+    
+    foreach ($tables as $table) {
+        $result = $conn->query("SELECT COUNT(*) as count FROM $table");
+        $count = $result ? $result->fetch_assoc()['count'] : 0;
+        
+        $result = $conn->query("SELECT 
+            ROUND((data_length + index_length) / 1024 / 1024, 2) AS size_mb 
+            FROM information_schema.TABLES 
+            WHERE table_schema = DATABASE() AND table_name = '$table'");
+        $size = $result ? $result->fetch_assoc()['size_mb'] : 0;
+        
+        $stats['tables'][$table] = [
+            'rows' => number_format($count),
+            'size_mb' => $size
+        ];
+    }
+    
+    // Oldest and newest records
+    $result = $conn->query("SELECT MIN(dt) as oldest, MAX(dt) as newest FROM rec_data");
+    if ($row = $result->fetch_assoc()) {
+        $stats['oldest_record'] = $row['oldest'] ?: 'N/A';
+        $stats['newest_record'] = $row['newest'] ?: 'N/A';
+        
+        // Calculate data span
+        if ($row['oldest'] && $row['newest']) {
+            $oldest = strtotime($row['oldest']);
+            $newest = strtotime($row['newest']);
+            $days = round(($newest - $oldest) / 86400);
+            $stats['data_span_days'] = $days;
+        }
+    }
+    
+    // Check event scheduler status
+    $result = $conn->query("SHOW VARIABLES LIKE 'event_scheduler'");
+    if ($row = $result->fetch_assoc()) {
+        $stats['event_scheduler'] = $row['Value'];
+    }
+    
+    // Database version
+    $result = $conn->query("SELECT VERSION() as version");
+    if ($row = $result->fetch_assoc()) {
+        $stats['db_version'] = $row['version'];
+    }
+    
+    return $stats;
+}
+
+// Get all statistics
 $conn = new mysqli($servername, $username, $password, $dbname);
-if ($conn->connect_error) {
-    error_log("Database connection failed: " . $conn->connect_error);
-    $eventLogs = [];
-} else {
+$dbConnected = !$conn->connect_error;
+
+if ($dbConnected) {
+    // Get event logs
     $sql = "SELECT event_name, execution_time, rows_affected, status, error_message 
             FROM event_log 
             ORDER BY execution_time DESC 
@@ -103,10 +229,20 @@ if ($conn->connect_error) {
         }
     }
     
+    // Get database statistics
+    $databaseStats = getDatabaseStats($conn);
+    
     $conn->close();
+} else {
+    error_log("Database connection failed: " . $conn->connect_error);
+    $eventLogs = [];
+    $eventStats = [];
+    $databaseStats = [];
 }
 
 $systemStats = getSystemStats();
+$networkInfo = getNetworkInfo();
+$serviceStatus = getServiceStatus();
 ?>
 <!DOCTYPE html>
 <html>
@@ -257,16 +393,6 @@ $systemStats = getSystemStats();
             background-color: #f5f5f5;
         }
         
-        .status-success {
-            color: #28a745;
-            font-weight: bold;
-        }
-        
-        .status-error {
-            color: #dc3545;
-            font-weight: bold;
-        }
-        
         .badge {
             display: inline-block;
             padding: 4px 8px;
@@ -290,11 +416,38 @@ $systemStats = getSystemStats();
             color: #721c24;
         }
         
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .status-online {
+            background-color: #28a745;
+        }
+        
+        .status-offline {
+            background-color: #dc3545;
+        }
+        
         .refresh-time {
             text-align: center;
             color: #666;
             font-style: italic;
             margin-top: 20px;
+        }
+        
+        .ip-list {
+            list-style: none;
+            padding: 0;
+            margin: 5px 0;
+        }
+        
+        .ip-list li {
+            padding: 3px 0;
+            font-family: monospace;
         }
     </style>
 </head>
@@ -451,7 +604,129 @@ $systemStats = getSystemStats();
                 </span>
             </div>
         </div>
+        
+        <!-- Network Information Card -->
+        <div class="card">
+            <h2>🌐 Network Information</h2>
+            <div class="stat-row">
+                <span class="stat-label">Hostname:</span>
+                <span class="stat-value"><?php echo htmlspecialchars($networkInfo['hostname']); ?></span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Local IPs:</span>
+                <span class="stat-value">
+                    <?php if (!empty($networkInfo['local_ips'])): ?>
+                        <ul class="ip-list">
+                            <?php foreach ($networkInfo['local_ips'] as $ip): ?>
+                                <li><?php echo htmlspecialchars($ip); ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php else: ?>
+                        N/A
+                    <?php endif; ?>
+                </span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">External IP:</span>
+                <span class="stat-value"><?php echo htmlspecialchars($networkInfo['external_ip']); ?></span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Internet:</span>
+                <span class="stat-value">
+                    <span class="status-indicator <?php echo $networkInfo['internet_connected'] ? 'status-online' : 'status-offline'; ?>"></span>
+                    <?php echo $networkInfo['internet_connected'] ? 'Connected' : 'Disconnected'; ?>
+                </span>
+            </div>
+        </div>
+        
+        <!-- Service Status Card -->
+        <div class="card">
+            <h2>🔧 Service Status</h2>
+            <div class="stat-row">
+                <span class="stat-label">PHP Version:</span>
+                <span class="stat-value"><?php echo $serviceStatus['php_version']; ?></span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Web Server:</span>
+                <span class="stat-value">
+                    <span class="status-indicator <?php echo $serviceStatus['webserver_status'] === 'Running' ? 'status-online' : 'status-offline'; ?>"></span>
+                    <?php echo $serviceStatus['webserver']; ?>
+                    <?php if (isset($serviceStatus['webserver_version'])): ?>
+                        (<?php echo $serviceStatus['webserver_version']; ?>)
+                    <?php endif; ?>
+                </span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Database:</span>
+                <span class="stat-value">
+                    <span class="status-indicator <?php echo $serviceStatus['database_status'] === 'Running' ? 'status-online' : 'status-offline'; ?>"></span>
+                    <?php echo $serviceStatus['database_status']; ?>
+                    <?php if ($dbConnected && isset($databaseStats['db_version'])): ?>
+                        (<?php echo $databaseStats['db_version']; ?>)
+                    <?php endif; ?>
+                </span>
+            </div>
+            <?php if ($dbConnected && isset($databaseStats['event_scheduler'])): ?>
+            <div class="stat-row">
+                <span class="stat-label">Event Scheduler:</span>
+                <span class="stat-value">
+                    <span class="status-indicator <?php echo strtoupper($databaseStats['event_scheduler']) === 'ON' ? 'status-online' : 'status-offline'; ?>"></span>
+                    <?php echo strtoupper($databaseStats['event_scheduler']); ?>
+                </span>
+            </div>
+            <?php endif; ?>
+        </div>
+        
+        <!-- Database Statistics Card -->
+        <?php if ($dbConnected && !empty($databaseStats)): ?>
+        <div class="card">
+            <h2>🗄️ Database Statistics</h2>
+            <div class="stat-row">
+                <span class="stat-label">Total Size:</span>
+                <span class="stat-value"><?php echo $databaseStats['total_size_mb']; ?> MB</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Data Span:</span>
+                <span class="stat-value">
+                    <?php echo isset($databaseStats['data_span_days']) ? $databaseStats['data_span_days'] . ' days' : 'N/A'; ?>
+                </span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Oldest Record:</span>
+                <span class="stat-value"><?php echo $databaseStats['oldest_record']; ?></span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Newest Record:</span>
+                <span class="stat-value"><?php echo $databaseStats['newest_record']; ?></span>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
+    
+    <!-- Database Tables Detail -->
+    <?php if ($dbConnected && !empty($databaseStats['tables'])): ?>
+    <div class="table-container" style="margin-bottom: 30px;">
+        <h2>📊 Database Tables</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Table Name</th>
+                    <th>Row Count</th>
+                    <th>Size (MB)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($databaseStats['tables'] as $tableName => $tableData): ?>
+                <tr>
+                    <td><?php echo htmlspecialchars($tableName); ?></td>
+                    <td><?php echo $tableData['rows']; ?></td>
+                    <td><?php echo $tableData['size_mb']; ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php endif; ?>
     
     <!-- Event Statistics -->
     <?php if (!empty($eventStats)): ?>
@@ -513,7 +788,7 @@ $systemStats = getSystemStats();
             </tbody>
         </table>
     </div>
-    <?php else: ?>
+    <?php elseif ($dbConnected): ?>
     <div class="card">
         <p style="text-align: center; color: #666;">No event logs found. Make sure the event_log table exists and events are configured with logging.</p>
     </div>

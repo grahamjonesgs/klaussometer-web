@@ -1,4 +1,40 @@
 
+// Set up mosquitto tls
+sudo mkdir -p /etc/mosquitto/certs
+
+# Create symlinks to Let's Encrypt certs
+sudo ln -s /etc/letsencrypt/live/mydomain.com/fullchain.pem /etc/mosquitto/certs/server.crt
+sudo ln -s /etc/letsencrypt/live/mydomain.com/privkey.pem /etc/mosquitto/certs/server.key
+sudo ln -s /etc/letsencrypt/live/mydomain.com/chain.pem /etc/mosquitto/certs/ca.crt
+# Set permissions
+sudo chown -h mosquitto:mosquitto /etc/mosquitto/certs/*
+
+
+//Default.conf
+allow_anonymous false
+password_file /etc/mosquitto/passwd
+
+# Unencrypted listener (keep for backward compatibility)
+listener 1883
+protocol mqtt
+
+# Encrypted listener using Let's Encrypt certificates
+listener 8883
+protocol mqtt
+certfile /etc/mosquitto/certs/server.crt
+keyfile /etc/mosquitto/certs/server.key
+
+# Don't require client certificates
+require_certificate false
+
+# Use TLS 1.2 or higher
+tls_version tlsv1.2
+
+// User adding
+Then add the user for mosquitto
+
+// Should be set up
+
 
 
 // Setup Apache
