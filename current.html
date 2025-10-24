@@ -289,7 +289,7 @@
                 var $loadingCard = $('<div>')
                     .addClass('room-card solar-card')
                     .attr('id', 'solar-loading')
-                    .html('<h2>☀️ Solar Power</h2><p>Loading...</p>');
+                    .html('<h2>Generation</h2><p>Loading...</p>');
                 $('#solar-container').append($loadingCard);
             }
             
@@ -312,7 +312,7 @@
                     .addClass('room-card solar-card')
                     .attr('data-type', 'solar-main');
 
-                var $title = $('<h2>').html('☀️ Solar Power');
+                var $title = $('<h2>').html('Generation');
 
                 var $powerPara = $('<p>');
                 var $powerValue = $('<span>')
@@ -321,14 +321,7 @@
                 var $powerUnit = $('<span>').addClass('unit').text('kW');
                 $powerPara.append($powerValue, $powerUnit);
 
-                // Using power
-                var $usingRow = $('<div>').addClass('stat-row');
-                $usingRow.append(
-                    $('<span>').addClass('stat-label').text('Using:'),
-                    $('<span>').addClass('stat-value').text((solarData.using_power / 1000).toFixed(2) + ' kW')
-                );
-
-                $solarCard.append($title, $powerPara, $usingRow);
+                $solarCard.append($title, $powerPara);
 
                 // Battery card (if available)
                 if (solarData.battery_soc !== null && solarData.battery_soc !== undefined) {
@@ -336,7 +329,7 @@
                         .addClass('room-card solar-card')
                         .attr('data-type', 'solar-battery');
 
-                    var $batteryTitle = $('<h2>').html('🔋 Battery');
+                    var $batteryTitle = $('<h2>').html('Battery');
                     
                     var $batteryPara = $('<p>');
                     var $batteryValue = $('<span>')
@@ -348,7 +341,7 @@
                     // Battery power flow
                     var $batteryFlowRow = $('<div>').addClass('stat-row');
                     var batteryFlow = (solarData.battery_power / 1000).toFixed(2);
-                    var batteryDirection = solarData.battery_power > 0 ? '↑ Charging' : '↓ Discharging';
+                    var batteryDirection = solarData.battery_power < 0 ? 'Charging' : 'Discharging';
                     $batteryFlowRow.append(
                         $('<span>').addClass('stat-label').text('Power:'),
                         $('<span>').addClass('stat-value').text(Math.abs(batteryFlow) + ' kW ' + batteryDirection)
@@ -358,16 +351,42 @@
                     solarContainer.append($batteryCard);
                 }
 
+                // Using card
+                if (solarData.using_power !== null && solarData.using_power !== undefined) {
+                    var $usingCard = $('<div>')
+                        .addClass('room-card solar-card')
+                        .attr('data-type', 'solar-grid');
+
+                    var $usingTitle = $('<h2>').html('House usage');
+                    
+                    var usingPowerKW = (solarData.using_power / 1000).toFixed(2);
+
+                    var $usingPara = $('<p>');
+                    var $usingValue = $('<span>')
+                        .addClass('value-display power-value')
+                        .text(Math.abs(usingPowerKW));
+                    var $usingUnit = $('<span>').addClass('unit').text('kW');
+                    $usingPara.append($usingValue, $usingUnit);
+                    
+                    var $usingFlowRow = $('<div>').addClass('stat-row');
+                    $usingFlowRow.append(
+                        $('<span>').addClass('stat-label').text(''),
+                    );
+
+                    $usingCard.append($usingTitle, $usingPara, $usingFlowRow);
+                    solarContainer.append($usingCard);
+                }
+
+
                 // Grid card
                 if (solarData.grid_power !== null && solarData.grid_power !== undefined) {
                     var $gridCard = $('<div>')
                         .addClass('room-card solar-card')
                         .attr('data-type', 'solar-grid');
 
-                    var $gridTitle = $('<h2>').html('⚡ Grid');
+                    var $gridTitle = $('<h2>').html('Grid usage');
                     
                     var gridPowerKW = (solarData.grid_power / 1000).toFixed(2);
-                    var gridDirection = solarData.grid_power > 0 ? '↓ Importing' : '↑ Exporting';
 
                     var $gridPara = $('<p>');
                     var $gridValue = $('<span>')
@@ -379,7 +398,6 @@
                     var $gridFlowRow = $('<div>').addClass('stat-row');
                     $gridFlowRow.append(
                         $('<span>').addClass('stat-label').text(''),
-                        $('<span>').addClass('stat-value').text(gridDirection)
                     );
 
                     $gridCard.append($gridTitle, $gridPara, $gridFlowRow);
