@@ -93,6 +93,8 @@
                 <option value="tempset-ambient">Temperature</option>
                 <option value="tempset-humidity">Humidity</option>
                 <option value="battery">Battery Voltage</option>
+                <option value="co2">CO2</option>
+                <option value="pm25">PM2.5</option>
             </select>
         </div>
 
@@ -197,8 +199,10 @@
                                     display: true,
                                     title: {
                                         display: true,
-                                        text: type_text + (type_value === 'tempset-ambient' ? ' (°C)' : 
-                                                        type_value === 'tempset-humidity' ? ' (%)' : ' (V)'),
+                                        text: type_text + (type_value === 'tempset-ambient' ? ' (°C)' :
+                                                        type_value === 'tempset-humidity' ? ' (%)' :
+                                                        type_value === 'co2' ? ' (ppm)' :
+                                                        type_value === 'pm25' ? ' (µg/m³)' : ' (V)'),
                                         font: { size: 16 }
                                     }
                                 },

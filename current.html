@@ -137,8 +137,29 @@
         }
         
         .flash-humidity {
-            animation: flash-animation 1s ease-out 3; 
+            animation: flash-animation 1s ease-out 3;
             border-radius: 4px;
+        }
+
+        .co2-value {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #e67e22;
+            margin-bottom: 5px;
+        }
+
+        .pm25-value {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #8e44ad;
+            margin-bottom: 5px;
+        }
+
+        @media (max-width: 768px) {
+            .co2-value,
+            .pm25-value {
+                font-size: 2rem;
+            }
         }
 
         @media (max-width: 768px) {
@@ -156,6 +177,7 @@
                 font-size: 1rem;
             }
         }
+
     </style>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <script src="../js/config.js"></script> 
@@ -173,13 +195,16 @@
     <h2 style="text-align: center; color: #333; margin-top: 20px;">Temperature & Humidity</h2>
     <div id="dashboard-container" class="dashboard-container"></div>
     
+    <h2 style="text-align: center; color: #333; margin-top: 40px;">Air Quality</h2>
+    <div id="airquality-container" class="dashboard-container"></div>
+
     <h2 style="text-align: center; color: #333; margin-top: 40px;">Solar & Power</h2>
     <div id="solar-container" class="dashboard-container"></div>
-    
+
     <p id="last-updated-time" style="text-align: center; font-style: italic; color: #666;"></p>
 
     <script>
-        let previousRoomData = {}; 
+        let previousRoomData = {};
 
         $(document).ready(function() {
             refreshAll();
@@ -196,11 +221,12 @@
             if ($('#dashboard-container .room-card').length === 0) {
                 $('#dashboard-container').append('<div class="room-card" id="sensor-loading"><p>Loading sensors...</p></div>');
             }
-            
+
             $.get("latest.php", function(data) {
                 $('#sensor-loading').remove();
                 var dataJSON = JSON.parse(data);
                 var currentRoomData = {};
+                var airQualityData = {};
 
                 if (dataJSON.length > 0) {
                     dataJSON.forEach(function(item) {
@@ -208,22 +234,29 @@
                         var type = item.type;
                         var value = item.value;
 
-                        if (!currentRoomData[room_id]) {
-                            currentRoomData[room_id] = {
-                                temp: '--',
-                                humidity: '--'
-                            };
-                        }
-                        
-                        if (type === 'tempset-ambient') {
-                            currentRoomData[room_id].temp = parseFloat(value).toFixed(1);
-                        } else if (type === 'tempset-humidity') {
-                            currentRoomData[room_id].humidity = parseFloat(value).toFixed(0);
+                        if (type === 'co2' || type === 'pm25') {
+                            if (!airQualityData[room_id]) {
+                                airQualityData[room_id] = {};
+                            }
+                            if (type === 'co2') {
+                                airQualityData[room_id].co2 = parseFloat(value).toFixed(0);
+                            } else if (type === 'pm25') {
+                                airQualityData[room_id].pm25 = parseFloat(value).toFixed(1);
+                            }
+                        } else {
+                            if (!currentRoomData[room_id]) {
+                                currentRoomData[room_id] = { temp: '--', humidity: '--' };
+                            }
+                            if (type === 'tempset-ambient') {
+                                currentRoomData[room_id].temp = parseFloat(value).toFixed(1);
+                            } else if (type === 'tempset-humidity') {
+                                currentRoomData[room_id].humidity = parseFloat(value).toFixed(0);
+                            }
                         }
                     });
 
+                    // Render temperature/humidity cards
                     var dashboardContainer = $('#dashboard-container');
-                    // Clear all room cards (not solar cards - they're in different container now)
                     dashboardContainer.empty();
 
                     for (var room_id in currentRoomData) {
@@ -266,7 +299,46 @@
                     }
 
                     previousRoomData = currentRoomData;
-                    
+
+                    // Render air quality cards
+                    var aqContainer = $('#airquality-container');
+                    aqContainer.empty();
+
+                    if (Object.keys(airQualityData).length > 0) {
+                        for (var aq_room_id in airQualityData) {
+                            if (airQualityData.hasOwnProperty(aq_room_id)) {
+                                var aqDisplayName = (typeof roomMap !== 'undefined' && roomMap[aq_room_id]) ? roomMap[aq_room_id] : aq_room_id;
+                                var aqEntry = airQualityData[aq_room_id];
+
+                                if (aqEntry.co2 !== undefined) {
+                                    var $co2Card = $('<div>').addClass('room-card').attr('data-room-id', aq_room_id);
+                                    $co2Card.append($('<h2>').text(aqDisplayName + ' CO\u2082'));
+                                    var $co2Para = $('<p>');
+                                    $co2Para.append(
+                                        $('<span>').addClass('value-display co2-value').text(aqEntry.co2),
+                                        $('<span>').addClass('unit').text('ppm')
+                                    );
+                                    $co2Card.append($co2Para);
+                                    aqContainer.append($co2Card);
+                                }
+
+                                if (aqEntry.pm25 !== undefined) {
+                                    var $pm25Card = $('<div>').addClass('room-card').attr('data-room-id', aq_room_id);
+                                    $pm25Card.append($('<h2>').text(aqDisplayName + ' PM2.5'));
+                                    var $pm25Para = $('<p>');
+                                    $pm25Para.append(
+                                        $('<span>').addClass('value-display pm25-value').text(aqEntry.pm25),
+                                        $('<span>').addClass('unit').html('\u00b5g/m\u00b3')
+                                    );
+                                    $pm25Card.append($pm25Para);
+                                    aqContainer.append($pm25Card);
+                                }
+                            }
+                        }
+                    } else {
+                        aqContainer.html('<p style="text-align:center;color:#666;">No air quality data available</p>');
+                    }
+
                     setTimeout(() => {
                         $('.flash-temp, .flash-humidity').removeClass('flash-temp flash-humidity');
                     }, 3000);
@@ -341,7 +413,7 @@
                     // Battery power flow
                     var $batteryFlowRow = $('<div>').addClass('stat-row');
                     var batteryFlow = (solarData.battery_power / 1000).toFixed(2);
-                    var batteryDirection = solarData.battery_power < 0 ? 'Charging' : 'Discharging';
+                    var batteryDirection = solarData.battery_power < 0 ? 'Charging' : 'Discharging'; 
                     $batteryFlowRow.append(
                         $('<span>').addClass('stat-label').text('Power:'),
                         $('<span>').addClass('stat-value').text(Math.abs(batteryFlow) + ' kW ' + batteryDirection)

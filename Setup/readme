@@ -261,6 +261,11 @@ DO
 DELETE FROM event_log 
 WHERE execution_time < NOW() - INTERVAL 30 DAY;
 
+// make the scheduler start on reboot
+add to /etc/mysql/my.cnf
+[mysqld]
+event_scheduler = ON
+
 // Make PHP work with database
 sudo apt install php php-mysql libapache2-mod-php
  // DB backup
