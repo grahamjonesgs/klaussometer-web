@@ -78,6 +78,7 @@
 
 <body>
     <a href="current.html" class="nav-button">View Current</a>
+    <a href="ac_control.html" class="nav-button">AC Control</a>
     <button onclick="updateGraph()" class="nav-button">Refresh Now</button>
     <button onclick="chart.resetZoom()" class="nav-button">Reset Zoom</button>
     <a href="system_status.php" class="nav-button">System Status</a>
@@ -197,6 +198,7 @@
                             scales: {
                                 y: {
                                     display: true,
+                                    min: (type_value === 'pm25' || type_value === 'co2') ? 0 : undefined,
                                     title: {
                                         display: true,
                                         text: type_text + (type_value === 'tempset-ambient' ? ' (°C)' :

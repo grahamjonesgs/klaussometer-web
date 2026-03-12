@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>AC Control</title>
+    <style type="text/css">
+        .nav-button {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 10px;
+            background-color: #007bff;
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .nav-button:hover {
+            background-color: #0056b3;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #eef2f5;
+            padding: 20px;
+        }
+
+        .dashboard-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .room-card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            text-align: center;
+            min-width: 320px;
+            max-width: 480px;
+            flex: 1;
+        }
+
+        .room-card h2 {
+            margin: 0 0 20px;
+            font-size: 1.5rem;
+            color: #333;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .control-label {
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 8px;
+            display: block;
+            font-size: 0.95rem;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .ctrl-btn {
+            padding: 10px 18px;
+            border: 2px solid #ccc;
+            border-radius: 6px;
+            background: #f8f9fa;
+            color: #333;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .ctrl-btn:hover {
+            border-color: #007bff;
+            color: #007bff;
+        }
+
+        .ctrl-btn.active {
+            background-color: #007bff;
+            border-color: #007bff;
+            color: white;
+        }
+
+        .ctrl-btn.active-off {
+            background-color: #dc3545;
+            border-color: #dc3545;
+            color: white;
+        }
+
+        .temp-control {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .temp-display {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #007bff;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .temp-btn {
+            padding: 10px 18px;
+            border: 2px solid #ccc;
+            border-radius: 6px;
+            background: #f8f9fa;
+            color: #333;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .temp-btn:hover {
+            border-color: #007bff;
+            background: #007bff;
+            color: white;
+        }
+
+        .send-btn {
+            width: 100%;
+            padding: 14px;
+            margin-top: 10px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .send-btn:hover {
+            background-color: #1e7e34;
+        }
+
+        .send-btn:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
+        }
+
+        #status-msg {
+            margin-top: 14px;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            min-height: 20px;
+            text-align: center;
+        }
+
+        #status-msg.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        #status-msg.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        #status-msg.sending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        @media (max-width: 480px) {
+            .room-card {
+                min-width: 0;
+                padding: 20px;
+            }
+            .temp-display {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+</head>
+
+<body>
+    <a href="current.html" class="nav-button">View Current</a>
+    <a href="system_status.php" class="nav-button">System Status</a>
+
+    <h2 style="text-align: center; color: #333; margin-top: 20px;">AC Control &mdash; Kitchen</h2>
+
+    <div class="dashboard-container">
+        <div class="room-card">
+
+            <!-- Power -->
+            <div class="control-group">
+                <span class="control-label">Power</span>
+                <div class="btn-group">
+                    <button class="ctrl-btn" id="btn-power-on"  data-field="power" data-val="on"  onclick="selectBtn(this, 'power')">On</button>
+                    <button class="ctrl-btn" id="btn-power-off" data-field="power" data-val="off" onclick="selectBtn(this, 'power', true)">Off</button>
+                </div>
+            </div>
+
+            <!-- Temperature -->
+            <div class="control-group">
+                <span class="control-label">Temperature</span>
+                <div class="temp-control">
+                    <button class="temp-btn" onclick="changeTemp(-1)">&#9664;</button>
+                    <span class="temp-display" id="temp-display">22&deg;C</span>
+                    <button class="temp-btn" onclick="changeTemp(1)">&#9654;</button>
+                </div>
+            </div>
+
+            <!-- Mode -->
+            <div class="control-group">
+                <span class="control-label">Mode</span>
+                <div class="btn-group">
+                    <button class="ctrl-btn" data-field="mode" data-val="cool" onclick="selectBtn(this, 'mode')">Cool</button>
+                    <button class="ctrl-btn" data-field="mode" data-val="heat" onclick="selectBtn(this, 'mode')">Heat</button>
+                    <button class="ctrl-btn" data-field="mode" data-val="auto" onclick="selectBtn(this, 'mode')">Auto</button>
+                    <button class="ctrl-btn" data-field="mode" data-val="fan"  onclick="selectBtn(this, 'mode')">Fan</button>
+                    <button class="ctrl-btn" data-field="mode" data-val="dry"  onclick="selectBtn(this, 'mode')">Dry</button>
+                </div>
+            </div>
+
+            <!-- Fan -->
+            <div class="control-group">
+                <span class="control-label">Fan Speed</span>
+                <div class="btn-group">
+                    <button class="ctrl-btn" data-field="fan" data-val="auto"  onclick="selectBtn(this, 'fan')">Auto</button>
+                    <button class="ctrl-btn" data-field="fan" data-val="low"   onclick="selectBtn(this, 'fan')">Low</button>
+                    <button class="ctrl-btn" data-field="fan" data-val="med"   onclick="selectBtn(this, 'fan')">Med</button>
+                    <button class="ctrl-btn" data-field="fan" data-val="high"  onclick="selectBtn(this, 'fan')">High</button>
+                    <button class="ctrl-btn" data-field="fan" data-val="turbo" onclick="selectBtn(this, 'fan')">Turbo</button>
+                </div>
+            </div>
+
+            <button class="send-btn" id="send-btn" onclick="sendCommand()">Send Command</button>
+
+            <div id="status-msg"></div>
+        </div>
+    </div>
+
+    <script>
+        var acState = {
+            power: null,
+            temp:  22,
+            mode:  null,
+            fan:   null
+        };
+
+        function selectBtn(btn, field, isOff) {
+            // Deactivate all buttons for this field
+            $('[data-field="' + field + '"]').removeClass('active active-off');
+            // Activate the clicked button
+            $(btn).addClass(isOff ? 'active-off' : 'active');
+            acState[field] = btn.dataset.val;
+        }
+
+        function changeTemp(delta) {
+            var newTemp = acState.temp + delta;
+            if (newTemp < 16) newTemp = 16;
+            if (newTemp > 30) newTemp = 30;
+            acState.temp = newTemp;
+            $('#temp-display').text(newTemp + '\u00b0C');
+        }
+
+        function sendCommand() {
+            var payload = {};
+
+            if (acState.power !== null) payload.power = acState.power;
+            payload.temp = acState.temp;
+            if (acState.mode !== null) payload.mode = acState.mode;
+            if (acState.fan  !== null) payload.fan  = acState.fan;
+
+            var payloadStr = JSON.stringify(payload);
+
+            $('#send-btn').prop('disabled', true);
+            setStatus('Sending...', 'sending');
+
+            $.post('mqtt_publish.php', { payload: payloadStr }, function(data) {
+                if (data.ok) {
+                    setStatus('Command sent: ' + payloadStr, 'success');
+                } else {
+                    setStatus('Error: ' + (data.error || 'Unknown error'), 'error');
+                }
+            }, 'json').fail(function(xhr) {
+                setStatus('Request failed (' + xhr.status + ')', 'error');
+            }).always(function() {
+                $('#send-btn').prop('disabled', false);
+            });
+        }
+
+        function setStatus(msg, type) {
+            var $s = $('#status-msg');
+            $s.removeClass('success error sending').addClass(type).text(msg);
+        }
+    </script>
+</body>
+</html>
