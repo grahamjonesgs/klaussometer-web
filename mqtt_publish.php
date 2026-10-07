@@ -33,13 +33,20 @@ if (!preg_match('/^[a-zA-Z0-9\/\-_]+$/', $topic)) {
     exit;
 }
 
+// Credentials go in a temporary mosquitto_pub options file rather than on the
+// command line, where any local user could read them from the process list
+$configDir = sys_get_temp_dir() . '/mqtt_' . bin2hex(random_bytes(8));
+mkdir($configDir, 0700);
+$configFile = $configDir . '/mosquitto_pub';
+file_put_contents($configFile, '-u ' . MQTT_USER . "\n" . '-P ' . MQTT_PASS . "\n");
+chmod($configFile, 0600);
+
 // Build mosquitto_pub command — all arguments individually escaped
 $cmd = sprintf(
-    'mosquitto_pub -h %s -p %d -u %s -P %s -t %s -m %s 2>&1',
+    'XDG_CONFIG_HOME=%s mosquitto_pub -h %s -p %d -t %s -m %s 2>&1',
+    escapeshellarg($configDir),
     escapeshellarg(MQTT_HOST),
     (int) MQTT_PORT,
-    escapeshellarg(MQTT_USER),
-    escapeshellarg(MQTT_PASS),
     escapeshellarg($topic),
     escapeshellarg($payload)
 );
@@ -48,9 +55,13 @@ $output = [];
 $returnCode = 0;
 exec($cmd, $output, $returnCode);
 
+unlink($configFile);
+rmdir($configDir);
+
 if ($returnCode !== 0) {
+    error_log('mosquitto_pub failed: ' . implode(' ', $output));
     http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'mosquitto_pub failed: ' . implode(' ', $output)]);
+    echo json_encode(['ok' => false, 'error' => 'Failed to publish message']);
     exit;
 }
 

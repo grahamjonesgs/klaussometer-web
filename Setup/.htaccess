@@ -1,2 +1,2 @@
 # Deny all web access to this directory and its contents
-Deny from all
+Require all denied

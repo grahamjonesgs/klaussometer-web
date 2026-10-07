@@ -1,10 +1,48 @@
 <?php
 // auth.php - Include this at the top of any protected page
+// Credentials (AUTH_USERNAME, AUTH_PASSWORD_HASH) are defined in vars.php
+require_once 'vars.php';
+
+// Login rate limiting
+define('AUTH_MAX_ATTEMPTS', 5);
+define('AUTH_LOCKOUT_SECONDS', 900);
+
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path' => '/',
+    'secure' => true,
+    'httponly' => true,
+    'samesite' => 'Strict'
+]);
 session_start();
 
-// Configuration - CHANGE THESE!
-define('AUTH_USERNAME', 'graham');
-define('AUTH_PASSWORD', '$2y$10$OqAw7S3H0ZKckTw0IcUxY.9r55ce9EQ5du1EaGsK5vPgSYhxyZGLS');
+// Failed attempts are tracked per client IP in a file outside the web root,
+// so clearing cookies does not reset the counter
+function attemptsFile() {
+    return sys_get_temp_dir() . '/watsonia_login_' . md5($_SERVER['REMOTE_ADDR'] ?? '') . '.json';
+}
+
+function getAttempts() {
+    $file = attemptsFile();
+    if (!file_exists($file)) {
+        return ['count' => 0, 'first' => time()];
+    }
+    $data = json_decode(file_get_contents($file), true);
+    if (!$data || time() - $data['first'] > AUTH_LOCKOUT_SECONDS) {
+        return ['count' => 0, 'first' => time()];
+    }
+    return $data;
+}
+
+function recordFailedAttempt() {
+    $data = getAttempts();
+    $data['count']++;
+    file_put_contents(attemptsFile(), json_encode($data), LOCK_EX);
+}
+
+function clearAttempts() {
+    @unlink(attemptsFile());
+}
 
 // Check if user is already logged in
 function isLoggedIn() {
@@ -16,13 +54,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     $username = $_POST['username'] ?? '';
     $password = $_POST['password'] ?? '';
     
-    if ($username === AUTH_USERNAME && password_verify($password, AUTH_PASSWORD)) {
+    if (getAttempts()['count'] >= AUTH_MAX_ATTEMPTS) {
+        $loginError = 'Too many failed attempts. Try again later.';
+    } elseif ($username === AUTH_USERNAME && password_verify($password, AUTH_PASSWORD_HASH)) {
+        clearAttempts();
+        // New session ID on login to prevent session fixation
+        session_regenerate_id(true);
         $_SESSION['authenticated'] = true;
         $_SESSION['username'] = $username;
         $_SESSION['login_time'] = time();
         header('Location: ' . $_SERVER['PHP_SELF']);
         exit;
     } else {
+        recordFailedAttempt();
         $loginError = 'Invalid username or password';
     }
 }

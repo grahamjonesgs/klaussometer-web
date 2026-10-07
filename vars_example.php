@@ -19,4 +19,8 @@ define('MQTT_PORT', 1883);
 define('MQTT_USER', 'xxxxx');
 define('MQTT_PASS', 'xxxxx');
 define('MQTT_AC_TOPIC', 'Kitchen/ir-ac/set');
+
+// Login for protected pages (auth.php)
+define('AUTH_USERNAME', 'xxxxx');
+define('AUTH_PASSWORD_HASH', 'xxxxx');    // Generate with: php -r "echo password_hash('yourpassword', PASSWORD_DEFAULT);"
 ?>

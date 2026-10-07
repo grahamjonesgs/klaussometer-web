@@ -5,15 +5,24 @@ include 'vars.php';
 define('INTERVAL_10_MIN', 600);   // 10 minutes in seconds
 define('INTERVAL_30_MIN', 1800);  // 30 minutes in seconds
 
-$conn = new mysqli($servername, $username, $password, $dbname);
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+define('ALLOWED_TYPES', ['tempset-ambient', 'tempset-humidity', 'battery', 'co2', 'pm25']);
+
+$dataType = trim($_GET["dataType"] ?? '', '"\'');
+$days = intval(trim($_GET["days"] ?? '', '"\''));
+
+if (!in_array($dataType, ALLOWED_TYPES, true) || $days < 1 || $days > 9999) {
+    http_response_code(400);
+    echo json_encode(["error" => "Invalid parameters"]);
+    exit;
 }
 
-$dataType_string = $_GET["dataType"];
-$days_string = $_GET["days"];
-$dataType = trim($dataType_string,'"\''); 
-$days = intval(trim($days_string,'"\''));
+$conn = new mysqli($servername, $username, $password, $dbname);
+if ($conn->connect_error) {
+    error_log("Database connection failed: " . $conn->connect_error);
+    http_response_code(500);
+    echo json_encode(["error" => "Service temporarily unavailable"]);
+    exit;
+}
 
 $stmt = null;
 // Will average over 10 minutes for one day and 30 minutes for one week or there is too much noise

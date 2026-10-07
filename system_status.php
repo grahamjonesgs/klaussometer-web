@@ -2,7 +2,7 @@
 // Authentication - must be first line
 require_once 'auth.php';
 
-include 'vars.php';
+require_once 'vars.php';
 
 // Function to get system stats
 function getSystemStats() {
@@ -149,17 +149,25 @@ function getDatabaseStats($conn) {
     $stats['tables'] = [];
     
     foreach ($tables as $table) {
-        $result = $conn->query("SELECT COUNT(*) as count FROM $table");
-        $count = $result ? $result->fetch_assoc()['count'] : 0;
-        
-        $result = $conn->query("SELECT 
-            ROUND((data_length + index_length) / 1024 / 1024, 2) AS size_mb 
-            FROM information_schema.TABLES 
+        $result = $conn->query("SELECT
+            ROUND((data_length + index_length) / 1024 / 1024, 2) AS size_mb, table_rows
+            FROM information_schema.TABLES
             WHERE table_schema = DATABASE() AND table_name = '$table'");
-        $size = $result ? $result->fetch_assoc()['size_mb'] : 0;
-        
+        $info = $result ? $result->fetch_assoc() : null;
+        $size = $info ? $info['size_mb'] : 0;
+
+        // An exact COUNT(*) on a multi-million row InnoDB table takes tens of
+        // seconds, so use the engine's estimate for large tables
+        $estimate = $info ? (int) $info['table_rows'] : 0;
+        if ($estimate > 1000000) {
+            $rows = '~' . number_format($estimate);
+        } else {
+            $result = $conn->query("SELECT COUNT(*) as count FROM $table");
+            $rows = number_format($result ? $result->fetch_assoc()['count'] : 0);
+        }
+
         $stats['tables'][$table] = [
-            'rows' => number_format($count),
+            'rows' => $rows,
             'size_mb' => $size
         ];
     }

@@ -1,17 +1,17 @@
 # Deny access to the .git directory and its contents
 RedirectMatch 404 /\.git
+# Deny access to the cache directory (holds the Solarman API token)
+RedirectMatch 404 ^/cache(/|$)
 # --- General Best Practices ---
 Options -Indexes
 
 # --- Security: Deny Direct Access to Sensitive Files ---
 <Files "vars.php">
-    Order Allow,Deny
-    Deny from all
+    Require all denied
 </Files>
 
 <Files "auth.php">
-    Order Allow,Deny
-    Deny from all
+    Require all denied
 </Files>
 
 # --- Performance: Set Cache Headers ---
