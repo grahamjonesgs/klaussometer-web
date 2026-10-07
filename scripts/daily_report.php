@@ -23,14 +23,15 @@ date_default_timezone_set(LOCAL_TZ);
 define('REPORT_FILE', __DIR__ . '/../cache/daily_report.json');
 define('REPORT_MODEL', 'claude-opus-5-5');
 
-// Same names as js/config.js, plus kitchen
+// Same names as js/config.js
 $roomNames = [
     'livingroom' => 'Living Room',
     'bedroom' => 'Bedroom',
     'guest' => 'Playroom',
     'cave' => 'Cave',
     'outside' => 'Outside',
-    'kitchen' => 'Kitchen'
+    // The CO2/PM2.5 sensor still publishes as "kitchen" but now sits in the bedroom
+    'kitchen' => 'Bedroom'
 ];
 
 $typeNames = [

@@ -5,5 +5,7 @@ const roomMap = {
     'bedroom': 'Bedroom',
     'guest': 'Playroom',
     'cave': 'Cave',
-    'outside': 'Outside'
+    'outside': 'Outside',
+    // The CO2/PM2.5 sensor still publishes as "kitchen" but now sits in the bedroom
+    'kitchen': 'Bedroom'
 };
