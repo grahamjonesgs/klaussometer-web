@@ -156,11 +156,11 @@ function getDatabaseStats($conn) {
         $info = $result ? $result->fetch_assoc() : null;
         $size = $info ? $info['size_mb'] : 0;
 
-        // An exact COUNT(*) on a multi-million row InnoDB table takes tens of
-        // seconds, so use the engine's estimate for large tables
+        // An exact COUNT(*) on a multi-million row InnoDB table (rec_data) takes
+        // tens of seconds and the engine's estimate is unreliable, so skip it
         $estimate = $info ? (int) $info['table_rows'] : 0;
         if ($estimate > 1000000) {
-            $rows = '~' . number_format($estimate);
+            $rows = '—';
         } else {
             $result = $conn->query("SELECT COUNT(*) as count FROM $table");
             $rows = number_format($result ? $result->fetch_assoc()['count'] : 0);
