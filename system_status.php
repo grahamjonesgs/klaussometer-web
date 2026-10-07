@@ -44,7 +44,7 @@ function getSystemStats() {
     $days = floor($uptimeSeconds / 86400);
     $hours = floor(($uptimeSeconds % 86400) / 3600);
     $minutes = floor(($uptimeSeconds % 3600) / 60);
-    $stats['uptime_formatted'] = "${days}d ${hours}h ${minutes}m";
+    $stats['uptime_formatted'] = "{$days}d {$hours}h {$minutes}m";
     
     // Disk usage
     $disk = shell_exec('df -h / | tail -1');
@@ -58,8 +58,8 @@ function getSystemStats() {
     // Available updates
     $updates = shell_exec('/usr/lib/update-notifier/apt-check 2>&1');
     if (preg_match('/(\d+);(\d+)/', $updates, $matches)) {
-        $stats['updates_available'] = $matches[0];
-        $stats['security_updates'] = $matches[1];
+        $stats['updates_available'] = $matches[1];
+        $stats['security_updates'] = $matches[2];
     } else {
         $stats['updates_available'] = 'N/A';
         $stats['security_updates'] = 'N/A';

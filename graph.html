@@ -170,20 +170,17 @@
                         }
                     });
 
-                    const chartDatasets = Object.keys(datasets).map(roomId => {
+                    // For battery, only show rooms that have a battery sensor
+                    const roomIds = Object.keys(datasets).filter(roomId =>
+                        type_value !== 'battery' || roomsWithBatteryData.has(roomId));
+
+                    const filteredDatasets = roomIds.map(roomId => {
                         return {
                             label: `${roomMap[roomId] || roomId} - ${currentValues[roomId]}`,
                             fill: false,
                             data: datasets[roomId]
                         };
                     });
-
-                    let filteredDatasets;
-                    if (type_value === 'battery') {
-                        filteredDatasets = chartDatasets.filter(ds => roomsWithBatteryData.has(ds.label.split(' ')[0].toLowerCase()));
-                    } else {
-                        filteredDatasets = chartDatasets;
-                    }
 
                     const allDatasets = { datasets: filteredDatasets };
 
