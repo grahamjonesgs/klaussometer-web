@@ -10,7 +10,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $payload = isset($_POST['payload']) ? trim($_POST['payload']) : '';
-$topic   = isset($_POST['topic'])   ? trim($_POST['topic'])   : MQTT_AC_TOPIC;
+// Topic is fixed server-side so callers can only ever drive the AC
+$topic   = MQTT_AC_TOPIC;
 
 if ($payload === '') {
     http_response_code(400);

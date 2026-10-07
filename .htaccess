@@ -20,6 +20,12 @@ Options -Indexes
     Require all denied
 </Files>
 
+# AC control is shelved: the page and its unauthenticated MQTT publisher are
+# kept in the repo but not served. Delete this block to re-enable.
+<FilesMatch "^(ac_control\.html|mqtt_publish\.php)$">
+    Require all denied
+</FilesMatch>
+
 # --- Performance: Set Cache Headers ---
 <IfModule mod_expires.c>
     ExpiresActive On
