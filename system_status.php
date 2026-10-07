@@ -131,6 +131,53 @@ function getServiceStatus() {
     return $services;
 }
 
+// Exact row count for rec_data without a full COUNT(*) on every load (~26s).
+// A cached total covers rows older than a cutoff; each load adds rows between
+// the old and new cutoff and counts the last few minutes live. Assumes rows are
+// never deleted from rec_data.
+function getRecDataCount($conn) {
+    $cacheFile = __DIR__ . '/cache/rec_data_count.json';
+    // Rows newer than this aren't cached, so late arrivals are still counted
+    $settleMinutes = 5;
+
+    $result = $conn->query("SELECT NOW() - INTERVAL $settleMinutes MINUTE AS cutoff");
+    if (!$result) {
+        return null;
+    }
+    $newCutoff = $result->fetch_assoc()['cutoff'];
+
+    $cache = file_exists($cacheFile) ? json_decode(file_get_contents($cacheFile), true) : null;
+
+    if ($cache && isset($cache['total'], $cache['cutoff'])) {
+        $stmt = $conn->prepare("SELECT COUNT(*) FROM rec_data WHERE dt >= ? AND dt < ?");
+        $stmt->bind_param("ss", $cache['cutoff'], $newCutoff);
+    } else {
+        // First run: full count (slow, once)
+        $stmt = $conn->prepare("SELECT COUNT(*) FROM rec_data WHERE dt < ?");
+        $stmt->bind_param("s", $newCutoff);
+        $cache = ['total' => 0];
+    }
+    if (!$stmt->execute()) {
+        return null;
+    }
+    $total = $cache['total'] + $stmt->get_result()->fetch_row()[0];
+    $stmt->close();
+
+    // Write to a temp file and rename so a concurrent load never reads a partial file
+    $tmpFile = $cacheFile . '.' . getmypid();
+    if (file_put_contents($tmpFile, json_encode(['total' => $total, 'cutoff' => $newCutoff])) !== false) {
+        rename($tmpFile, $cacheFile);
+    }
+
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM rec_data WHERE dt >= ?");
+    $stmt->bind_param("s", $newCutoff);
+    $stmt->execute();
+    $recent = $stmt->get_result()->fetch_row()[0];
+    $stmt->close();
+
+    return $total + $recent;
+}
+
 // Function to get database statistics
 function getDatabaseStats($conn) {
     $stats = [];
@@ -157,17 +204,15 @@ function getDatabaseStats($conn) {
     
     foreach ($tables as $table => $dateColumn) {
         $result = $conn->query("SELECT
-            ROUND((data_length + index_length) / 1024 / 1024, 2) AS size_mb, table_rows
+            ROUND((data_length + index_length) / 1024 / 1024, 2) AS size_mb
             FROM information_schema.TABLES
             WHERE table_schema = DATABASE() AND table_name = '$table'");
         $info = $result ? $result->fetch_assoc() : null;
         $size = $info ? $info['size_mb'] : 0;
 
-        // An exact COUNT(*) on a multi-million row InnoDB table (rec_data) takes
-        // tens of seconds and the engine's estimate is unreliable, so skip it
-        $estimate = $info ? (int) $info['table_rows'] : 0;
-        if ($estimate > 1000000) {
-            $rows = '—';
+        if ($table === 'rec_data') {
+            $count = getRecDataCount($conn);
+            $rows = $count === null ? 'N/A' : number_format($count);
         } else {
             $result = $conn->query("SELECT COUNT(*) as count FROM $table");
             $rows = number_format($result ? $result->fetch_assoc()['count'] : 0);
