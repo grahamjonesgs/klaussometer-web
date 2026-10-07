@@ -145,10 +145,17 @@ function getDatabaseStats($conn) {
     }
     
     // Table sizes and row counts
-    $tables = ['rec_data', 'hourly_avg', 'daily_avg', 'event_log'];
+    // Table => timestamp column, used to show the latest entry so you can
+    // see the aggregation events are still running
+    $tables = [
+        'rec_data' => 'dt',
+        'hourly_avg' => 'dt_hour',
+        'daily_avg' => 'dt_day',
+        'event_log' => 'execution_time'
+    ];
     $stats['tables'] = [];
     
-    foreach ($tables as $table) {
+    foreach ($tables as $table => $dateColumn) {
         $result = $conn->query("SELECT
             ROUND((data_length + index_length) / 1024 / 1024, 2) AS size_mb, table_rows
             FROM information_schema.TABLES
@@ -166,9 +173,13 @@ function getDatabaseStats($conn) {
             $rows = number_format($result ? $result->fetch_assoc()['count'] : 0);
         }
 
+        $result = $conn->query("SELECT MAX($dateColumn) AS latest FROM $table");
+        $latest = $result ? $result->fetch_assoc()['latest'] : null;
+
         $stats['tables'][$table] = [
             'rows' => $rows,
-            'size_mb' => $size
+            'size_mb' => $size,
+            'latest' => $latest ?: 'N/A'
         ];
     }
     
@@ -721,6 +732,7 @@ $serviceStatus = getServiceStatus();
                     <th>Table Name</th>
                     <th>Row Count</th>
                     <th>Size (MB)</th>
+                    <th>Latest Entry</th>
                 </tr>
             </thead>
             <tbody>
@@ -729,6 +741,7 @@ $serviceStatus = getServiceStatus();
                     <td><?php echo htmlspecialchars($tableName); ?></td>
                     <td><?php echo $tableData['rows']; ?></td>
                     <td><?php echo $tableData['size_mb']; ?></td>
+                    <td><?php echo htmlspecialchars($tableData['latest']); ?></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
