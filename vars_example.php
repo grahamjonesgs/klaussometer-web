@@ -23,4 +23,7 @@ define('MQTT_AC_TOPIC', 'Kitchen/ir-ac/set');
 // Login for protected pages (auth.php)
 define('AUTH_USERNAME', 'xxxxx');
 define('AUTH_PASSWORD_HASH', 'xxxxx');    // Generate with: php -r "echo password_hash('yourpassword', PASSWORD_DEFAULT);"
+
+// Claude API key for the daily report (scripts/daily_report.php)
+define('ANTHROPIC_API_KEY', 'xxxxx');
 ?>

@@ -102,6 +102,33 @@
             color: rgba(255,255,255,0.9);
         }
 
+        .report-card {
+            max-width: 1000px;
+            margin: 0 auto;
+            text-align: left;
+            flex: none;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .report-card ul {
+            margin: 0;
+            padding-left: 20px;
+            line-height: 1.5;
+            color: #333;
+        }
+
+        .report-card li {
+            margin-bottom: 8px;
+        }
+
+        .report-meta {
+            margin: 12px 0 0;
+            font-size: 0.85rem;
+            font-style: italic;
+            color: #888;
+        }
+
         .stat-row {
             display: flex;
             justify-content: space-between;
@@ -203,12 +230,23 @@
     <h2 style="text-align: center; color: #333; margin-top: 40px;">Solar & Power</h2>
     <div id="solar-container" class="dashboard-container"></div>
 
+    <div id="report-section" hidden>
+        <h2 style="text-align: center; color: #333; margin-top: 40px;">Yesterday at Home</h2>
+        <div class="dashboard-container">
+            <div class="room-card report-card">
+                <ul id="report-list"></ul>
+                <p id="report-meta" class="report-meta"></p>
+            </div>
+        </div>
+    </div>
+
     <p id="last-updated-time" style="text-align: center; font-style: italic; color: #666;"></p>
 
     <script>
         let previousRoomData = {};
 
         $(document).ready(function() {
+            showReport();
             refreshAll();
             setInterval(refreshAll, 30000);
         });
@@ -493,6 +531,22 @@
                     })
                     .html('<h2>⚠️ Solar System</h2><p style="color:#856404;">Unable to load data</p>');
                 $('#solar-container').append($errorCard);
+            });
+        }
+
+        // Daily AI summary, generated once a day by scripts/daily_report.php
+        function showReport() {
+            $.getJSON("report.php", function(report) {
+                var $list = $('#report-list').empty();
+                report.text.split('\n').forEach(function(line) {
+                    line = line.replace(/^\s*-\s*/, '').trim();
+                    if (line) {
+                        $list.append($('<li>').text(line));
+                    }
+                });
+                var date = new Date(report.date + 'T00:00:00');
+                $('#report-meta').text('Summary of ' + date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) + ', written by Claude');
+                document.getElementById('report-section').hidden = false;
             });
         }
 

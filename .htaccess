@@ -2,6 +2,8 @@
 RedirectMatch 404 /\.git
 # Deny access to the cache directory (holds the Solarman API token)
 RedirectMatch 404 ^/cache(/|$)
+# Deny access to cron scripts and their Composer dependencies
+RedirectMatch 404 ^/scripts(/|$)
 # --- General Best Practices ---
 Options -Indexes
 
@@ -11,6 +13,10 @@ Options -Indexes
 </Files>
 
 <Files "auth.php">
+    Require all denied
+</Files>
+
+<Files "solarman_lib.php">
     Require all denied
 </Files>
 
