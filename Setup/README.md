@@ -14,7 +14,7 @@ or are re-created by hand (marked **secret** below).
 | Ubuntu | 26.04 LTS, on AWS EC2 (eu-west-1) | 22 | Host. 1 vCPU, 1 GB RAM, 4 GB swap file. Clock and database in **UTC**. |
 | Apache + PHP | 2.4 / PHP 8.5 | 80, 443 | Serves this repo from `/var/www/watsonia22.com` (Let's Encrypt certificate). |
 | Mosquitto | 2.0 | 1883 | MQTT broker. Sensors and Klaussometer displays publish readings here. |
-| Node-RED | 5.0 | 1880 | Subscribes to sensor topics and writes them to MariaDB. |
+| Node-RED | 5.0 | 1880 (localhost only) | Subscribes to sensor topics and writes them to MariaDB. Editor at `https://watsonia22.com/node-red/`, through Apache. |
 | MariaDB | 11.8 | 3306 (localhost only) | `readings` database. Scheduled events build hourly and daily averages. |
 | Python | 3.14 (standard library only) | | Solar generation forecast, `scripts/solar/`. |
 | AWS CLI | 2 | | Uploads backups to `s3://watsonia22-backups` using the instance's IAM role. |
@@ -89,8 +89,9 @@ point to, and:
 
 - **IAM role** allowing `s3:PutObject` on `watsonia22-backups/*`, plus `s3:ListBucket`/`s3:GetObject`
   for restores. The bucket has a lifecycle rule for retention; the role cannot delete.
-- **Security group** inbound: 22 (SSH), 80, 443, 1883 (MQTT, for the sensors), 1880 (Node-RED
-  editor). The firewall on the box (`ufw`) is off; the security group is the firewall.
+- **Security group** inbound: 22 (SSH), 80, 443, 1883 (MQTT, for the sensors). Do not open
+  1880: Node-RED only listens on 127.0.0.1, and Apache serves its editor over HTTPS (step 7).
+  The firewall on the box (`ufw`) is off; the security group is the firewall.
 
 ```bash
 sudo timedatectl set-timezone Etc/UTC
@@ -124,6 +125,7 @@ mkdir /var/www/watsonia22.com/cache && sudo chown www-data:www-data /var/www/wat
 
 ```bash
 cp /var/www/watsonia22.com/vars_example.php /var/www/watsonia22.com/vars.php
+chmod 640 /var/www/watsonia22.com/vars.php     # owner and www-data only
 ```
 
 Fill in (**secret**): the read-only database user (`reader`), Solarman API app ID, secret, login
@@ -141,7 +143,7 @@ cd /var/www/watsonia22.com/scripts && composer install
 
 ```bash
 sudo cp /var/www/watsonia22.com/Setup/apache/watsonia22.com.conf /etc/apache2/sites-available/
-sudo a2enmod rewrite ssl
+sudo a2enmod rewrite ssl proxy proxy_http
 sudo a2ensite watsonia22.com && sudo a2dissite 000-default
 sudo systemctl reload apache2
 sudo certbot --apache -d watsonia22.com -d www.watsonia22.com
@@ -149,8 +151,24 @@ sudo certbot --apache -d watsonia22.com -d www.watsonia22.com
 
 Certbot creates `watsonia22.com-le-ssl.conf` and the HTTP-to-HTTPS redirect. Compare it with
 `Setup/apache/watsonia22.com-le-ssl.conf`, which adds the `<Directory>` block with
-`AllowOverride All` (needed for `.htaccess`). Renewal runs from certbot's own systemd timer
-(`snap.certbot.renew.timer`), not cron.
+`AllowOverride All` (needed for `.htaccess`) and the proxy for the Node-RED editor:
+
+```apache
+RedirectMatch 301 ^/node-red$ /node-red/
+ProxyPass        /node-red/ http://127.0.0.1:1880/node-red/ upgrade=websocket
+ProxyPassReverse /node-red/ http://127.0.0.1:1880/node-red/
+```
+
+`upgrade=websocket` carries the editor's live connection (`/node-red/comms`). Renewal runs from
+certbot's own systemd timer (`snap.certbot.renew.timer`), not cron.
+
+To stop Apache announcing its version and OS, set these in
+`/etc/apache2/conf-available/security.conf`:
+
+```apache
+ServerTokens Prod
+ServerSignature Off
+```
 
 ### 5. MariaDB
 
@@ -228,16 +246,25 @@ cp /var/www/watsonia22.com/Setup/node-red/flows.json .
 node-red                                       # first run creates settings.js; stop with Ctrl-C
 ```
 
-Edit `~/.node-red/settings.js` to require a login for the editor (**secret**):
+Edit `~/.node-red/settings.js`. Require a login for the editor (**secret**), listen only on the
+server itself, and serve the editor under `/node-red` so Apache can proxy it (step 4):
 
 ```js
 adminAuth: {
     type: "credentials",
     users: [{ username: "admin", password: "<hash>", permissions: "*" }]
 },
+uiHost: "127.0.0.1",
+httpAdminRoot: '/node-red',
 ```
 
-Generate the hash with `node-red admin hash-pw`.
+Generate the hash with `node-red admin hash-pw`. Keep the files holding secrets readable only by
+their owner:
+
+```bash
+sudo chown root:ubuntu ~/.node-red/settings.js && sudo chmod 640 ~/.node-red/settings.js
+chmod 600 ~/.node-red/flows_cred.json ~/.node-red/.config.runtime.json ~/.node-red/.config.users.json
+```
 
 Run it as a service:
 
@@ -246,7 +273,7 @@ sudo cp /var/www/watsonia22.com/Setup/node-red/nodered.service /etc/systemd/syst
 sudo systemctl daemon-reload && sudo systemctl enable --now nodered
 ```
 
-Open `http://watsonia22.com:1880`. In the flow, open the **local mqtt** broker node
+Open `https://watsonia22.com/node-red/` and log in. In the flow, open the **local mqtt** broker node
 (`localhost:1883`) and enter the `reporter` login. Open the **LocalDB** MySQL node
 (`127.0.0.1:3306`, database `readings`) and enter a database user that can insert, such as the
 admin user. Then deploy. These credentials are encrypted in `flows_cred.json` with a key in
@@ -338,6 +365,8 @@ The solar jobs run as `www-data` because only it can refresh the Solarman token 
   running.
 - `sudo mariadb readings -e "SELECT MAX(dt) FROM rec_data"` is within the last few minutes.
 - `https://watsonia22.com/scripts/` and `/cache/` return 404.
+- `https://watsonia22.com/node-red/` shows the Node-RED login, and `http://watsonia22.com:1880`
+  does not connect.
 - `mosquitto_sub -h localhost -u reporter -P '...' -t solar/forecast -C 1` prints the forecast
   straight away (it is retained).
 - The next morning, both backup logs end in `uploaded to s3://...`.
