@@ -1,0 +1,2 @@
+30 3 * * * /home/ubuntu/bin/backup_readings.sh >> /home/ubuntu/backups/mariadb/backup.log 2>&1
+0 3 * * 0 /home/ubuntu/bin/backup_config.sh >> /home/ubuntu/backups/config/backup.log 2>&1

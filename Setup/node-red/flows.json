@@ -451,5 +451,45 @@
         "x": 620,
         "y": 180,
         "wires": []
+    },
+    {
+        "id": "89dcd0c2b92c223e",
+        "type": "mqtt in",
+        "z": "16875acb6e261384",
+        "name": "",
+        "topic": "kitchen/co2/set",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "d65544ef.5cd538",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 80,
+        "y": 620,
+        "wires": [
+            [
+                "7c939f2b06cd6af6"
+            ]
+        ]
+    },
+    {
+        "id": "f7ac31bd533bac56",
+        "type": "mqtt in",
+        "z": "16875acb6e261384",
+        "name": "",
+        "topic": "kitchen/pm25/set",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "d65544ef.5cd538",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 80,
+        "y": 700,
+        "wires": [
+            [
+                "7c939f2b06cd6af6"
+            ]
+        ]
     }
 ]

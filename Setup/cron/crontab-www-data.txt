@@ -1,0 +1,6 @@
+# Daily AI house report (summarises yesterday) - 04:00 UTC = 06:00 Cape Town
+0 4 * * * php /var/www/watsonia22.com/scripts/daily_report.php >> /var/www/watsonia22.com/cache/daily_report.log 2>&1
+# Solar forecast (scripts/solar): refresh today's inverter readings and re-forecast hourly
+10 * * * * cd /var/www/watsonia22.com/scripts/solar && { python3 collect.py --only solarman && python3 model.py forecast; } >> data/solar.log 2>&1
+# Weekly: refresh weather history and refit the model - Sundays 02:30 UTC
+30 2 * * 0 cd /var/www/watsonia22.com/scripts/solar && { python3 collect.py --only weather && python3 model.py fit; } >> data/solar.log 2>&1
