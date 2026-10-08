@@ -272,6 +272,17 @@ python3 model.py evaluate                    # optional back-test, prints accura
 ```
 
 `solar_forecast.php` serves `data/forecast.json` to the Solar Forecast cards on `current.html`.
+Each forecast is also published as a retained MQTT message on `solar/forecast` for the Klaussometer
+displays, using the MQTT login in `vars.php`. It is compact because the firmware's MQTT buffer is
+small:
+
+```json
+{"ts":1791463917,"at":"14:51","today":{"exp":22.6,"pot":25.6,"made":19.7,"full":"14:00"},"tomorrow":{"exp":14.4,"pot":14.4,"full":null}}
+```
+
+`exp` is expected kWh after throttling, `pot` what the roof could make, `made` generated so far
+today, and `full` the time the battery is expected to be full (`null` if it won't fill). `ts` is
+when the forecast was made (Unix time), so a display can tell when it is stale.
 The coordinates and station start date are at the top of `collect.py` and `model.py`. The
 module docstrings explain the method (throttling when the battery is full, two panel groups,
 learned shade map).
@@ -305,7 +316,7 @@ All times are UTC. Cape Town is UTC+2 with no daylight saving.
 | ubuntu | `30 3 * * *` | 05:30 daily | `~/bin/backup_readings.sh`: dumps `readings` (with events), keeps 14 days locally, uploads to `s3://watsonia22-backups/db/` | `~/backups/mariadb/backup.log` |
 | ubuntu | `0 3 * * 0` | 05:00 Sunday | `~/bin/backup_config.sh`: tars secrets and config (see fast path), keeps 8 weeks, uploads to `s3://watsonia22-backups/config/` | `~/backups/config/backup.log` |
 | www-data | `0 4 * * *` | 06:00 daily | `scripts/daily_report.php`: summarises yesterday with Claude, writes `cache/daily_report.json` for the dashboard | `cache/daily_report.log` |
-| www-data | `10 * * * *` | hourly at :10 | `scripts/solar/collect.py --only solarman` then `model.py forecast`: today's inverter readings, then a new forecast for today and tomorrow | `scripts/solar/data/solar.log` |
+| www-data | `10 * * * *` | hourly at :10 | `scripts/solar/collect.py --only solarman` then `model.py forecast`: today's inverter readings, then a new forecast for today and tomorrow, also published to MQTT `solar/forecast` (retained) | `scripts/solar/data/solar.log` |
 | www-data | `30 2 * * 0` | 04:30 Sunday | `scripts/solar/collect.py --only weather` then `model.py fit`: refreshes weather history and refits the solar model | `scripts/solar/data/solar.log` |
 
 Jobs scheduled elsewhere, which need no setup beyond the steps above:
@@ -327,6 +338,8 @@ The solar jobs run as `www-data` because only it can refresh the Solarman token 
   running.
 - `sudo mariadb readings -e "SELECT MAX(dt) FROM rec_data"` is within the last few minutes.
 - `https://watsonia22.com/scripts/` and `/cache/` return 404.
+- `mosquitto_sub -h localhost -u reporter -P '...' -t solar/forecast -C 1` prints the forecast
+  straight away (it is retained).
 - The next morning, both backup logs end in `uploaded to s3://...`.
 
 ## Keeping this guide current

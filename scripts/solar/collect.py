@@ -85,10 +85,11 @@ def save_gz(path, obj):
 
 # --- Solarman ---------------------------------------------------------------
 
-def solar_config():
-    """Read the SOLAR_* defines from vars.php."""
+def php_defines(prefix):
+    """Read the define('<prefix>...', value) settings from vars.php as strings."""
     with open(os.path.join(ROOT, 'vars.php')) as f:
-        return dict(re.findall(r"define\('(SOLAR_\w+)',\s*'([^']*)'\)", f.read()))
+        found = re.findall(r"define\('(" + prefix + r"\w+)',\s*(?:'([^']*)'|(\d+))\)", f.read())
+    return {name: quoted or number for name, quoted, number in found}
 
 
 def solarman_token():
@@ -102,7 +103,7 @@ def solarman_token():
 
 
 def collect_solarman():
-    cfg = solar_config()
+    cfg = php_defines('SOLAR_')
     token = solarman_token()
     url = f"https://{cfg['SOLAR_URL']}/station/v1.0/history?language=en"
     headers = {'Content-Type': 'application/json', 'Authorization': 'bearer ' + token}

@@ -3,7 +3,8 @@
 
     python3 model.py fit        fit roof orientation, efficiency and shade map -> data/model.json
     python3 model.py evaluate   back-test against past days (day-ahead and same-day forecasts)
-    python3 model.py forecast   predict today and tomorrow -> data/forecast.json
+    python3 model.py forecast   predict today and tomorrow -> data/forecast.json, and a compact
+                                retained MQTT message on solar/forecast for the Klaussometer
 
 How it works
   1. Solarman 5-minute readings are averaged to hourly generation. The system cannot
@@ -25,6 +26,8 @@ import gzip
 import json
 import math
 import os
+import socket
+import struct
 import sys
 import urllib.parse
 import urllib.request
@@ -33,6 +36,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, 'data')
 MODEL_FILE = os.path.join(DATA, 'model.json')
 FORECAST_FILE = os.path.join(DATA, 'forecast.json')
+# Retained MQTT message for the Klaussometer displays (compact: the firmware's MQTT buffer is small)
+MQTT_TOPIC = 'solar/forecast'
 
 LAT, LON = -33.936646, 18.427981
 LOCAL_TZ = dt.timezone(dt.timedelta(hours=2))
@@ -449,6 +454,51 @@ def forecast():
     os.replace(tmp, FORECAST_FILE)
     for d in out['days']:
         print(f"{d['date']}: potential {d['potential_kwh']} kWh, expected {d['expected_kwh']} kWh")
+
+    today, tomorrow = out['days']
+    compact = {'ts': int(now.timestamp()), 'at': now.astimezone(LOCAL_TZ).strftime('%H:%M'),
+               'today': {'exp': today['expected_kwh'], 'pot': today['potential_kwh'],
+                         'made': today['measured_kwh'], 'full': today['battery_full_by']},
+               'tomorrow': {'exp': tomorrow['expected_kwh'], 'pot': tomorrow['potential_kwh'],
+                            'full': tomorrow['battery_full_by']}}
+    try:
+        mqtt_publish(MQTT_TOPIC, json.dumps(compact, separators=(',', ':')))
+    except (OSError, RuntimeError) as e:
+        # The forecast file is written; the displays just keep the previous message
+        print(f"forecast: MQTT publish failed: {e}", file=sys.stderr)
+
+
+# --- MQTT -------------------------------------------------------------------------
+
+def mqtt_publish(topic, payload):
+    """Publish one retained QoS 0 message (MQTT 3.1.1) using the login in vars.php.
+
+    Plain sockets rather than mosquitto_pub, so the password never appears on a command line."""
+    from collect import php_defines
+    cfg = php_defines('MQTT_')
+
+    def string(s):
+        b = s.encode()
+        return struct.pack('!H', len(b)) + b
+
+    def packet(kind, body):
+        n, length = len(body), b''
+        while True:
+            n, digit = divmod(n, 128)
+            length += bytes([digit | (128 if n else 0)])
+            if not n:
+                return bytes([kind]) + length + body
+
+    connect = (string('MQTT') + bytes([4, 0xC2]) + struct.pack('!H', 30)   # v3.1.1, user+pass, clean
+               + string('solar-forecast') + string(cfg['MQTT_USER']) + string(cfg['MQTT_PASS']))
+    with socket.create_connection((cfg['MQTT_HOST'], int(cfg['MQTT_PORT'])), timeout=10) as sock:
+        sock.sendall(packet(0x10, connect))
+        connack = sock.recv(4)
+        if len(connack) < 4 or connack[0] != 0x20 or connack[3] != 0:
+            raise RuntimeError(f"broker refused connection (CONNACK {connack.hex()})")
+        sock.sendall(packet(0x31, string(topic) + payload.encode()))   # PUBLISH, retain
+        sock.sendall(packet(0xE0, b''))                                # DISCONNECT
+    print(f"forecast: published {len(payload)} bytes to {topic}")
 
 
 if __name__ == '__main__':
