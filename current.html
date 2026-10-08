@@ -229,6 +229,12 @@
     <h2 style="text-align: center; color: #333; margin-top: 40px;">Solar & Power</h2>
     <div id="solar-container" class="dashboard-container"></div>
 
+    <div id="forecast-section" hidden>
+        <h2 style="text-align: center; color: #333; margin-top: 40px;">Solar Forecast</h2>
+        <div id="forecast-container" class="dashboard-container"></div>
+        <p id="forecast-meta" class="report-meta" style="text-align: center;"></p>
+    </div>
+
     <div id="report-section" hidden>
         <h2 style="text-align: center; color: #333; margin-top: 40px;">Yesterday at Home</h2>
         <div class="dashboard-container">
@@ -253,6 +259,7 @@
         function refreshAll() {
             showCurrent();
             showSolar();
+            showForecast();
         }
 
         function showCurrent() {
@@ -530,6 +537,51 @@
                     })
                     .html('<h2>⚠️ Solar System</h2><p style="color:#856404;">Unable to load data</p>');
                 $('#solar-container').append($errorCard);
+            });
+        }
+
+        // Solar forecast for today and tomorrow, updated hourly by scripts/solar/model.py.
+        // "Expected" allows for throttling: with no export, generation stops at what the
+        // house uses once the battery is full. "Potential" is what the roof could make.
+        function showForecast() {
+            $.getJSON("solar_forecast.php", function(forecast) {
+                var $container = $('#forecast-container').empty();
+
+                forecast.days.forEach(function(day, i) {
+                    var $card = $('<div>').addClass('room-card solar-card');
+                    $card.append($('<h2>').text(i === 0 ? 'Today' : 'Tomorrow'));
+
+                    var $para = $('<p>');
+                    $para.append(
+                        $('<span>').addClass('value-display power-value').text(day.expected_kwh.toFixed(1)),
+                        $('<span>').addClass('unit').text('kWh')
+                    );
+                    $card.append($para);
+
+                    function addRow(label, value) {
+                        $card.append($('<div>').addClass('stat-row').append(
+                            $('<span>').addClass('stat-label').text(label),
+                            $('<span>').addClass('stat-value').text(value)
+                        ));
+                    }
+
+                    if (day.measured_kwh > 0) {
+                        addRow('Generated so far:', day.measured_kwh.toFixed(1) + ' kWh');
+                    }
+                    addRow('Roof could make:', day.potential_kwh.toFixed(1) + ' kWh');
+                    addRow('Battery full by:', day.battery_full_by || 'Not expected');
+                    var lost = day.potential_kwh - day.expected_kwh;
+                    if (lost >= 0.5) {
+                        addRow('Lost to throttling:', lost.toFixed(1) + ' kWh');
+                    }
+
+                    $container.append($card);
+                });
+
+                var updated = new Date(forecast.generated_at);
+                $('#forecast-meta').text('Forecast updated ' + updated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    + ' from the Open-Meteo weather forecast');
+                document.getElementById('forecast-section').hidden = false;
             });
         }
 

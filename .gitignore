@@ -3,3 +3,10 @@
 /vars.php
 /cache/
 /scripts/vendor/
+# Solar forecast: 5-minute house power data shows when the house is empty, so it stays
+# off this public repo (collect.py re-downloads it); the forecast and log change hourly
+/scripts/solar/data/solarman/
+/scripts/solar/data/forecast.json
+/scripts/solar/data/*.tmp
+/scripts/solar/data/solar.log
+__pycache__/
