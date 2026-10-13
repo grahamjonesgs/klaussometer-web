@@ -189,8 +189,9 @@ sudo mariadb < /var/www/watsonia22.com/Setup/database/schema.sql
 sudo mariadb readings -e "SHOW EVENTS"     # expect 3 events, ENABLED
 ```
 
-The `ubuntu@localhost` user logs in through the unix socket with no password. The nightly
-backup uses it.
+The `ubuntu@localhost` and `www-data@localhost` users log in through the unix socket with no
+password. The nightly backup uses `ubuntu`; the solar forecast jobs use `www-data`, which can only
+read and write the `solar_forecast` and `solar_actual` tables.
 
 ### 6. Mosquitto
 
@@ -295,6 +296,7 @@ cd /var/www/watsonia22.com/scripts/solar
 sudo -u www-data python3 collect.py
 sudo -u www-data python3 model.py fit        # ~1 min
 sudo -u www-data python3 model.py forecast   # writes data/forecast.json for the dashboard
+sudo -u www-data python3 model.py actuals    # fills solar_actual for every day since 2023 (~1 min)
 python3 model.py evaluate                    # optional back-test, prints accuracy
 ```
 
@@ -310,6 +312,12 @@ small:
 `exp` is expected kWh after throttling, `pot` what the roof could make, `made` generated so far
 today, and `full` the time the battery is expected to be full (`null` if it won't fill). `ts` is
 when the forecast was made (Unix time), so a display can tell when it is stale.
+
+Each run also records its forecast in the `solar_forecast` table and updates `solar_actual` for
+the last two completed days (generation, and when the battery first reached 97%). The
+`solar_accuracy` view lines each day's actual up against the forecasts made at 18:10 the evening
+before and 06:10 that morning. A restored database backup already contains these tables; a fresh
+one gets them from `schema.sql`.
 The coordinates and station start date are at the top of `collect.py` and `model.py`. The
 module docstrings explain the method (throttling when the battery is full, two panel groups,
 learned shade map).
@@ -343,7 +351,7 @@ All times are UTC. Cape Town is UTC+2 with no daylight saving.
 | ubuntu | `30 3 * * *` | 05:30 daily | `~/bin/backup_readings.sh`: dumps `readings` (with events), keeps 14 days locally, uploads to `s3://watsonia22-backups/db/` | `~/backups/mariadb/backup.log` |
 | ubuntu | `0 3 * * 0` | 05:00 Sunday | `~/bin/backup_config.sh`: tars secrets and config (see fast path), keeps 8 weeks, uploads to `s3://watsonia22-backups/config/` | `~/backups/config/backup.log` |
 | www-data | `0 4 * * *` | 06:00 daily | `scripts/daily_report.php`: summarises yesterday with Claude, writes `cache/daily_report.json` for the dashboard | `cache/daily_report.log` |
-| www-data | `10 * * * *` | hourly at :10 | `scripts/solar/collect.py --only solarman` then `model.py forecast`: today's inverter readings, then a new forecast for today and tomorrow, also published to MQTT `solar/forecast` (retained) | `scripts/solar/data/solar.log` |
+| www-data | `10 * * * *` | hourly at :10 | `scripts/solar/collect.py --only solarman` then `model.py forecast`: today's inverter readings, then a new forecast for today and tomorrow, also published to MQTT `solar/forecast` (retained) and recorded with recent actuals in MariaDB (`solar_forecast`, `solar_actual`) | `scripts/solar/data/solar.log` |
 | www-data | `30 2 * * 0` | 04:30 Sunday | `scripts/solar/collect.py --only weather` then `model.py fit`: refreshes weather history and refits the solar model | `scripts/solar/data/solar.log` |
 
 Jobs scheduled elsewhere, which need no setup beyond the steps above:

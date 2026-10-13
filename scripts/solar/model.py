@@ -4,7 +4,9 @@
     python3 model.py fit        fit roof orientation, efficiency and shade map -> data/model.json
     python3 model.py evaluate   back-test against past days (day-ahead and same-day forecasts)
     python3 model.py forecast   predict today and tomorrow -> data/forecast.json, and a compact
-                                retained MQTT message on solar/forecast for the Klaussometer
+                                retained MQTT message on solar/forecast for the Klaussometer;
+                                records it and recent actuals in MariaDB (solar_forecast, solar_actual)
+    python3 model.py actuals    backfill solar_actual for every day since the system started
 
 How it works
   1. Solarman 5-minute readings are averaged to hourly generation. The system cannot
@@ -28,6 +30,7 @@ import math
 import os
 import socket
 import struct
+import subprocess
 import sys
 import urllib.parse
 import urllib.request
@@ -455,17 +458,86 @@ def forecast():
     for d in out['days']:
         print(f"{d['date']}: potential {d['potential_kwh']} kWh, expected {d['expected_kwh']} kWh")
 
-    today, tomorrow = out['days']
+    day0, day1 = out['days']
     compact = {'ts': int(now.timestamp()), 'at': now.astimezone(LOCAL_TZ).strftime('%H:%M'),
-               'today': {'exp': today['expected_kwh'], 'pot': today['potential_kwh'],
-                         'made': today['measured_kwh'], 'full': today['battery_full_by']},
-               'tomorrow': {'exp': tomorrow['expected_kwh'], 'pot': tomorrow['potential_kwh'],
-                            'full': tomorrow['battery_full_by']}}
+               'today': {'exp': day0['expected_kwh'], 'pot': day0['potential_kwh'],
+                         'made': day0['measured_kwh'], 'full': day0['battery_full_by']},
+               'tomorrow': {'exp': day1['expected_kwh'], 'pot': day1['potential_kwh'],
+                            'full': day1['battery_full_by']}}
     try:
         mqtt_publish(MQTT_TOPIC, json.dumps(compact, separators=(',', ':')))
     except (OSError, RuntimeError) as e:
         # The forecast file is written; the displays just keep the previous message
         print(f"forecast: MQTT publish failed: {e}", file=sys.stderr)
+
+    try:
+        record_forecast(out, now)
+        record_actuals(gen, [today - dt.timedelta(days=d) for d in (2, 1)])
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"forecast: database update failed: {getattr(e, 'stderr', '') or e}", file=sys.stderr)
+
+
+# --- Accuracy records (MariaDB) ---------------------------------------------------
+# Runs as www-data, which logs in to MariaDB through the unix socket with no password
+# and may only read and write these two tables. See Setup/database/schema.sql.
+
+def run_sql(sql):
+    subprocess.run(['mariadb', 'readings', '--batch', '-e', sql],
+                   check=True, capture_output=True, text=True)
+
+
+def sql_value(v):
+    if v is None:
+        return 'NULL'
+    return repr(round(v, 2)) if isinstance(v, float) else f"'{v}'"
+
+
+def record_forecast(out, now):
+    issued = now.replace(second=0, microsecond=0).strftime('%Y-%m-%d %H:%M:%S')
+    rows = [(d['date'], issued, ahead, float(d['expected_kwh']), float(d['potential_kwh']),
+             d['battery_full_by'] and d['battery_full_by'] + ':00')
+            for ahead, d in enumerate(out['days'])]
+    run_sql("INSERT INTO solar_forecast (target_date, issued_at, days_ahead, expected_kwh, potential_kwh, "
+            "battery_full_by) VALUES " + ', '.join('(' + ', '.join(map(sql_value, r)) + ')' for r in rows)
+            + " ON DUPLICATE KEY UPDATE expected_kwh = VALUES(expected_kwh), "
+              "potential_kwh = VALUES(potential_kwh), battery_full_by = VALUES(battery_full_by)")
+
+
+def day_actual(day, gen):
+    """(generated kWh, time battery first reached CURTAIL_SOC in daylight, max SoC), or None if data is missing."""
+    hours = [gen[t] for t in day_hours(day) if t in gen]
+    if len(hours) < 20:
+        return None
+    full_at, max_soc = None, 0.0
+    path = os.path.join(DATA, 'solarman', f"{day}.json.gz")
+    if os.path.exists(path):
+        with gzip.open(path, 'rt') as f:
+            for r in sorted(json.load(f), key=lambda r: r['dateTime']):
+                local = dt.datetime.fromtimestamp(r['dateTime'], LOCAL_TZ)
+                soc = r.get('batterySoc') or 0
+                if local.date() != day:
+                    continue   # Solarman's day file starts at 23:00 the day before
+                max_soc = max(max_soc, soc)
+                if full_at is None and soc >= CURTAIL_SOC and (r.get('generationPower') or 0) > 0:
+                    full_at = local.strftime('%H:%M:00')
+    return sum(h[0] for h in hours), full_at, max_soc
+
+
+def record_actuals(gen, days):
+    now = dt.datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')
+    rows = []
+    for day in days:
+        actual = day_actual(day, gen)
+        if actual:
+            kwh, full_at, max_soc = actual
+            rows.append((str(day), kwh, full_at, float(max_soc), now))
+    for i in range(0, len(rows), 200):
+        run_sql("INSERT INTO solar_actual (day, generated_kwh, battery_full_at, max_soc, updated_at) VALUES "
+                + ', '.join('(' + ', '.join(map(sql_value, r)) + ')' for r in rows[i:i + 200])
+                + " ON DUPLICATE KEY UPDATE generated_kwh = VALUES(generated_kwh), "
+                  "battery_full_at = VALUES(battery_full_at), max_soc = VALUES(max_soc), "
+                  "updated_at = VALUES(updated_at)")
+    return len(rows)
 
 
 # --- MQTT -------------------------------------------------------------------------
@@ -513,5 +585,10 @@ if __name__ == '__main__':
         evaluate()
     elif cmd == 'forecast':
         forecast()
+    elif cmd == 'actuals':
+        gen = load_generation()
+        yesterday = dt.datetime.now(LOCAL_TZ).date() - dt.timedelta(days=1)
+        days = [FIRST_GOOD_DAY + dt.timedelta(days=i) for i in range((yesterday - FIRST_GOOD_DAY).days + 1)]
+        print(f"actuals: recorded {record_actuals(gen, days)} of {len(days)} days")
     else:
         sys.exit(__doc__)

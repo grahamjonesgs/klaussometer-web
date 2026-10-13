@@ -93,6 +93,43 @@ CREATE EVENT IF NOT EXISTS cleanup_event_log
 ON SCHEDULE EVERY 1 WEEK
 DO DELETE FROM event_log WHERE execution_time < NOW() - INTERVAL 30 DAY;
 
+-- Solar forecast accuracy, written hourly by scripts/solar/model.py (as www-data)
+CREATE TABLE IF NOT EXISTS solar_forecast (
+    target_date DATE NOT NULL COMMENT 'Cape Town day being forecast',
+    issued_at DATETIME NOT NULL COMMENT 'UTC, when the forecast was made',
+    days_ahead TINYINT NOT NULL COMMENT '0 = forecast for the same day, 1 = for the next day',
+    expected_kwh FLOAT NOT NULL COMMENT 'after throttling once the battery is full',
+    potential_kwh FLOAT NOT NULL COMMENT 'what the roof could make',
+    battery_full_by TIME NULL COMMENT 'Cape Town time; NULL = not expected to fill',
+    PRIMARY KEY (target_date, issued_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS solar_actual (
+    day DATE NOT NULL PRIMARY KEY COMMENT 'Cape Town day',
+    generated_kwh FLOAT NOT NULL,
+    battery_full_at TIME NULL COMMENT 'Cape Town time battery first reached 97% in daylight; NULL = never',
+    max_soc FLOAT NULL,
+    updated_at DATETIME NOT NULL COMMENT 'UTC'
+) ENGINE=InnoDB;
+
+-- One row per day: actual against the forecast from the evening before (16:10 UTC = 18:10
+-- Cape Town) and from that morning (04:10 UTC = 06:10 Cape Town). Use this for graphs.
+CREATE OR REPLACE VIEW solar_accuracy AS
+SELECT a.day,
+       a.generated_kwh,
+       e.expected_kwh AS evening_before_kwh,
+       m.expected_kwh AS morning_kwh,
+       a.battery_full_at,
+       e.battery_full_by AS evening_before_full_by,
+       m.battery_full_by AS morning_full_by
+FROM solar_actual a
+LEFT JOIN solar_forecast e ON e.target_date = a.day AND e.issued_at = (
+    SELECT MIN(issued_at) FROM solar_forecast
+    WHERE target_date = a.day AND days_ahead = 1 AND issued_at >= a.day - INTERVAL 1 DAY + INTERVAL 16 HOUR)
+LEFT JOIN solar_forecast m ON m.target_date = a.day AND m.issued_at = (
+    SELECT MIN(issued_at) FROM solar_forecast
+    WHERE target_date = a.day AND days_ahead = 0 AND issued_at >= a.day + INTERVAL 4 HOUR);
+
 -- Users
 -- Admin user (Node-RED writes readings with it; also for remote admin tools)
 CREATE USER IF NOT EXISTS 'grahamjonesgs'@'%' IDENTIFIED BY 'CHANGE_ME';
@@ -105,3 +142,8 @@ GRANT SELECT ON readings.* TO 'reader'@'%';
 -- Passwordless (unix socket) user for the nightly backup, Setup/bin/backup_readings.sh
 CREATE USER IF NOT EXISTS 'ubuntu'@'localhost' IDENTIFIED VIA unix_socket;
 GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER ON readings.* TO 'ubuntu'@'localhost';
+
+-- Passwordless (unix socket) user for the solar forecast cron jobs, limited to its two tables
+CREATE USER IF NOT EXISTS 'www-data'@'localhost' IDENTIFIED VIA unix_socket;
+GRANT SELECT, INSERT, UPDATE ON readings.solar_forecast TO 'www-data'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON readings.solar_actual TO 'www-data'@'localhost';
