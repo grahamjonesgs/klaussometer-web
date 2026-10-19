@@ -33,7 +33,6 @@ import struct
 import subprocess
 import sys
 import urllib.parse
-import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, 'data')
@@ -412,8 +411,8 @@ def forecast():
     url = 'https://api.open-meteo.com/v1/forecast?' + urllib.parse.urlencode({
         'latitude': LAT, 'longitude': LON, 'hourly': ','.join(vars_),
         'past_days': 1, 'forecast_days': 3, 'timezone': 'GMT'})
-    with urllib.request.urlopen(url, timeout=60) as r:
-        weather = parse_open_meteo(json.loads(r.read()))
+    from collect import http_json   # retries with backoff, e.g. on Open-Meteo 503s
+    weather = parse_open_meteo(http_json(url))
 
     now = dt.datetime.now(UTC)
     today = now.astimezone(LOCAL_TZ).date()
