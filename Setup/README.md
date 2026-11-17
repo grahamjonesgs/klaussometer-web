@@ -89,9 +89,22 @@ point to, and:
 
 - **IAM role** allowing `s3:PutObject` on `watsonia22-backups/*`, plus `s3:ListBucket`/`s3:GetObject`
   for restores. The bucket has a lifecycle rule for retention; the role cannot delete.
-- **Security group** inbound: 22 (SSH), 80, 443, 1883 (MQTT, for the sensors). Do not open
-  1880: Node-RED only listens on 127.0.0.1, and Apache serves its editor over HTTPS (step 7).
-  The firewall on the box (`ufw`) is off; the security group is the firewall.
+- **Security groups.** 80 and 443 are open to everyone. Everything else is limited to the home
+  ISP, RSAWEB (AS37053), whose IPv4 ranges are in the managed prefix list `rsaweb-ipv4`
+  (`pl-08d6f62c0314e49ca`, max 25 entries). The home IP is not static, so rules use the whole
+  ISP rather than one address.
+  - `launch-wizard-2`: 80 and 443 from `0.0.0.0/0`; 1883 (MQTT, for the sensors) and 8883 from
+    `rsaweb-ipv4`.
+  - `rsaweb-ssh`: 22 from `rsaweb-ipv4` and from the VPN exit `86.38.99.192/32`. It is a separate
+    group because each prefix-list reference counts as 25 rules against the limit of 60.
+  - Do not open 1880: Node-RED only listens on 127.0.0.1, and Apache serves its editor over HTTPS
+    (step 7).
+
+  The same ranges are in `.htaccess` (the `klaussometer/` and `sensor/` firmware folders, whose
+  binaries contain credentials) and in the `/node-red/` block of
+  `Setup/apache/watsonia22.com-le-ssl.conf`. If RSAWEB's ranges change
+  (`https://stat.ripe.net/data/announced-prefixes/data.json?resource=AS37053`), update all three.
+  The firewall on the box (`ufw`) is off; the security groups are the firewall.
 
 ```bash
 sudo timedatectl set-timezone Etc/UTC
@@ -373,7 +386,10 @@ The solar jobs run as `www-data` because only it can refresh the Solarman token 
   running.
 - `sudo mariadb readings -e "SELECT MAX(dt) FROM rec_data"` is within the last few minutes.
 - `https://watsonia22.com/scripts/` and `/cache/` return 404.
-- `https://watsonia22.com/node-red/` shows the Node-RED login, and `http://watsonia22.com:1880`
+- From outside RSAWEB (for example `curl` on the server itself), `/klaussometer/version.txt`,
+  `/sensor/firmware.bin` and `/node-red/` return 403. The devices' update checks in the Apache
+  access log (user agent `ESP32HTTPClient`) still get 200.
+- From home, `https://watsonia22.com/node-red/` shows the Node-RED login, and `http://watsonia22.com:1880`
   does not connect.
 - `mosquitto_sub -h localhost -u reporter -P '...' -t solar/forecast -C 1` prints the forecast
   straight away (it is retained).
